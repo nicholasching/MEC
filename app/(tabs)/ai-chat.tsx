@@ -13,12 +13,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * AI Chat Screen
  * Main screen for interacting with Gemma AI model
  */
 export default function AIChatScreen() {
+  const insets = useSafeAreaInsets();
+  
   const {
     isInitialized,
     isInitializing,
@@ -32,6 +35,7 @@ export default function AIChatScreen() {
     sendMessage,
     clearHistory,
     importModelFile,
+    changeModel,
   } = useGemma();
 
   const [inputText, setInputText] = useState('');
@@ -50,7 +54,7 @@ export default function AIChatScreen() {
       console.log('Model file detected, auto-initializing...');
       initializeModel();
     }
-  }, [modelExists, isInitialized, isInitializing]);
+  }, [modelExists, isInitialized, isInitializing, initializeModel]);
 
   const handleSend = async () => {
     if (!inputText.trim() || isGenerating) return;
@@ -129,6 +133,9 @@ export default function AIChatScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <ThemedView style={styles.container}>
+        {/* Safe area top padding */}
+        <View style={{ paddingTop: insets.top }} />
+        
         {/* Header */}
         <ThemedView style={styles.header}>
           <View style={styles.headerLeft}>
@@ -140,20 +147,30 @@ export default function AIChatScreen() {
               <ThemedText style={styles.statusText}>Ready</ThemedText>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={clearHistory}
-            style={styles.clearButton}
-            disabled={messages.length === 0}
-          >
-            <ThemedText
-              style={[
-                styles.clearButtonText,
-                messages.length === 0 && styles.clearButtonTextDisabled,
-              ]}
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={changeModel}
+              style={styles.changeModelButton}
             >
-              Clear
-            </ThemedText>
-          </TouchableOpacity>
+              <ThemedText style={styles.changeModelButtonText}>
+                Change Model
+              </ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={clearHistory}
+              style={styles.clearButton}
+              disabled={messages.length === 0}
+            >
+              <ThemedText
+                style={[
+                  styles.clearButtonText,
+                  messages.length === 0 && styles.clearButtonTextDisabled,
+                ]}
+              >
+                Clear
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
         </ThemedView>
 
         {/* Error banner */}
@@ -174,7 +191,7 @@ export default function AIChatScreen() {
             <ThemedView style={styles.emptyState}>
               <ThemedText style={styles.emptyIcon}>🤖</ThemedText>
               <ThemedText style={styles.emptyTitle}>
-                Hi! I'm your AI assistant
+                Hi! I&apos;m your AI assistant
               </ThemedText>
               <ThemedText style={styles.emptySubtext}>
                 I run completely on your device using the Gemma 3n model.
@@ -183,13 +200,13 @@ export default function AIChatScreen() {
               <ThemedView style={styles.examplePrompts}>
                 <ThemedText style={styles.exampleTitle}>Try asking:</ThemedText>
                 <ThemedText style={styles.examplePrompt}>
-                  • "Explain quantum computing simply"
+                  • &quot;Explain quantum computing simply&quot;
                 </ThemedText>
                 <ThemedText style={styles.examplePrompt}>
-                  • "Write a haiku about technology"
+                  • &quot;Write a haiku about technology&quot;
                 </ThemedText>
                 <ThemedText style={styles.examplePrompt}>
-                  • "What are the benefits of on-device AI?"
+                  • &quot;What are the benefits of on-device AI?&quot;
                 </ThemedText>
               </ThemedView>
             </ThemedView>
@@ -345,6 +362,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   headerTitle: {
     fontSize: 20,
   },
@@ -366,6 +388,19 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     color: '#34C759',
+    fontWeight: '600',
+  },
+  changeModelButton: {
+    padding: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 149, 0, 0.3)',
+  },
+  changeModelButtonText: {
+    color: '#FF9500',
+    fontSize: 14,
     fontWeight: '600',
   },
   clearButton: {

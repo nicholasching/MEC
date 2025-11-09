@@ -260,6 +260,34 @@ export function useGemma() {
     }
   }, [updateModelInfo]);
 
+  const changeModel = useCallback(async (): Promise<void> => {
+    try {
+      // Close the current model engine
+      await gemmaService.close();
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      // Reset state to redirect back to model setup
+      setIsInitialized(false);
+      setIsInitializing(false);
+      setIsGenerating(false);
+      setMessages([]);
+      setPartialResponse('');
+      setError(null);
+      setModelExists(false);
+      setModelInfo(null);
+
+      console.log('Model closed, redirecting to setup screen');
+    } catch (err: any) {
+      console.error('Error changing model:', err);
+      if (isMountedRef.current) {
+        setError(err?.message || 'Failed to close current model');
+      }
+    }
+  }, []);
+
   return {
     isInitialized,
     isInitializing,
@@ -273,6 +301,7 @@ export function useGemma() {
     sendMessage,
     clearHistory,
     importModelFile,
+    changeModel,
   };
 }
 
