@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import java.util.UUID
 
@@ -78,8 +79,10 @@ class BleGattServer(private val context: Context) {
             )
             characteristic.addDescriptor(descriptor)
             
-            // Set initial value
-            characteristic.value = currentMessage.toByteArray(Charsets.UTF_8)
+            // Set initial value as base64-encoded (react-native-ble-plx expects base64)
+            val initialMessageBytes = currentMessage.toByteArray(Charsets.UTF_8)
+            val initialBase64 = Base64.encodeToString(initialMessageBytes, Base64.NO_WRAP)
+            characteristic.value = initialBase64.toByteArray(Charsets.UTF_8)
             
             // Add characteristic to service
             service.addCharacteristic(characteristic)
@@ -128,9 +131,15 @@ class BleGattServer(private val context: Context) {
         val characteristic = service?.getCharacteristic(CHARACTERISTIC_UUID)
         
         if (characteristic != null) {
-            characteristic.value = message.toByteArray(Charsets.UTF_8)
+            // Store message as base64-encoded bytes for consistency
+            // react-native-ble-plx expects base64-encoded values for both reads and notifications
+            val messageBytes = message.toByteArray(Charsets.UTF_8)
+            val base64Encoded = Base64.encodeToString(messageBytes, Base64.NO_WRAP)
+            val base64Bytes = base64Encoded.toByteArray(Charsets.UTF_8)
+            characteristic.value = base64Bytes
             
             // Notify all connected devices
+            // The notification will send the base64-encoded bytes
             connectedDevices.forEach { device ->
                 try {
                     gattServer?.notifyCharacteristicChanged(device, characteristic, false)
@@ -139,7 +148,7 @@ class BleGattServer(private val context: Context) {
                 }
             }
             
-            Log.d(TAG, "Message updated: ${message.take(50)}... (${message.length} chars)")
+            Log.d(TAG, "Message updated: ${message.take(50)}... (${message.length} chars, ${messageBytes.size} bytes UTF-8, ${base64Bytes.size} bytes base64)")
         }
     }
     
@@ -196,9 +205,24 @@ class BleGattServer(private val context: Context) {
             characteristic: BluetoothGattCharacteristic
         ) {
             if (characteristic.uuid == CHARACTERISTIC_UUID) {
-                val value = characteristic.value ?: currentMessage.toByteArray(Charsets.UTF_8)
-                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
-                Log.d(TAG, "Characteristic read by ${device.address}")
+                // react-native-ble-plx expects base64-encoded strings
+                // Convert message to UTF-8 bytes, then encode to base64
+                val messageBytes = currentMessage.toByteArray(Charsets.UTF_8)
+                val base64Encoded = Base64.encodeToString(messageBytes, Base64.NO_WRAP)
+                val base64Bytes = base64Encoded.toByteArray(Charsets.UTF_8)
+                
+                // Handle long reads - Android BLE stack handles chunking automatically
+                // We just need to return the correct portion based on offset
+                val responseValue = if (offset < base64Bytes.size) {
+                    // Return from offset to end (Android will chunk based on MTU)
+                    base64Bytes.copyOfRange(offset, base64Bytes.size)
+                } else {
+                    // Offset beyond data size - return empty
+                    ByteArray(0)
+                }
+                
+                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, responseValue)
+                Log.d(TAG, "Characteristic read by ${device.address}, offset=$offset, response size=${responseValue.size}, total=${base64Bytes.size} bytes (message: ${currentMessage.length} chars)")
             } else {
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null)
             }
@@ -214,10 +238,42 @@ class BleGattServer(private val context: Context) {
             value: ByteArray?
         ) {
             if (characteristic.uuid == CHARACTERISTIC_UUID && value != null) {
-                // Update the characteristic value
-                characteristic.value = value
-                val message = String(value, Charsets.UTF_8)
-                currentMessage = message
+                // react-native-ble-plx sends base64-encoded strings as UTF-8 bytes
+                // We need to collect all chunks, decode from base64, then convert to string
+                
+                // Store the incoming value chunks
+                // Android's BLE stack handles chunking automatically for long writes
+                val existingValue = characteristic.value
+                val newValue = if (offset == 0) {
+                    // New write starting - replace existing value
+                    value
+                } else if (existingValue != null && offset == existingValue.size) {
+                    // Continuation write - append to existing value
+                    val combined = ByteArray(existingValue.size + value.size)
+                    System.arraycopy(existingValue, 0, combined, 0, existingValue.size)
+                    System.arraycopy(value, 0, combined, existingValue.size, value.size)
+                    combined
+                } else {
+                    // Unexpected offset - log and use new value
+                    Log.w(TAG, "Unexpected write offset: $offset, existing size: ${existingValue?.size ?: 0}")
+                    value
+                }
+                
+                // Store the raw bytes (base64-encoded string as UTF-8)
+                characteristic.value = newValue
+                
+                // Decode base64 to get the actual message
+                try {
+                    val base64String = String(newValue, Charsets.UTF_8)
+                    val decodedBytes = Base64.decode(base64String, Base64.NO_WRAP)
+                    currentMessage = String(decodedBytes, Charsets.UTF_8)
+                } catch (e: Exception) {
+                    // If base64 decode fails, try treating as raw UTF-8 (fallback)
+                    Log.w(TAG, "Failed to decode base64, treating as UTF-8: ${e.message}")
+                    currentMessage = String(newValue, Charsets.UTF_8)
+                }
+                
+                val message = currentMessage
                 
                 // Notify callback
                 messageUpdateCallback?.invoke(message)
@@ -227,6 +283,13 @@ class BleGattServer(private val context: Context) {
                 }
                 
                 // Notify all other connected devices
+                // For notifications, we need to send base64-encoded value like we do for reads
+                // Update characteristic value with base64-encoded message for notifications
+                val messageBytes = message.toByteArray(Charsets.UTF_8)
+                val base64Encoded = Base64.encodeToString(messageBytes, Base64.NO_WRAP)
+                val base64Bytes = base64Encoded.toByteArray(Charsets.UTF_8)
+                characteristic.value = base64Bytes
+                
                 connectedDevices.forEach { connectedDevice ->
                     if (connectedDevice != device) {
                         try {
