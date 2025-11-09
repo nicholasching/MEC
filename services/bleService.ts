@@ -33,6 +33,17 @@ export const ADVERTISEMENT_SERVICE_UUID_16BIT = '0000597D-0000-1000-8000-00805f9
 // Client Characteristic Configuration Descriptor UUID (for notifications)
 const CLIENT_CHARACTERISTIC_CONFIG_UUID = '00002902-0000-1000-8000-00805f9b34fb';
 
+// Message format for global channel with routing
+interface RoutedMessage {
+  origin: string; // Original sender device ID
+  hops: number; // Number of hops/retransfers (max 5)
+  message: string; // Actual message text
+  timestamp: number; // Timestamp when message was created
+}
+
+// Maximum number of hops/retransfers
+const MAX_HOPS = 5;
+
 class BLEService {
   private manager: BleManager;
   private isScanning: boolean = false;
@@ -41,20 +52,48 @@ class BLEService {
   private connectedDevices: Map<string, Device> = new Map(); // deviceId -> Device
   private scanSubscription: any = null;
   private stateSubscription: any = null;
-  private messageListeners: Set<(deviceId: string, message: string) => void> = new Set();
+  private messageListeners: Set<(message: string, originDeviceId: string, senderDeviceId: string) => void> = new Set();
   private connectionListeners: Set<(deviceId: string, connected: boolean) => void> = new Set();
+  private connectedDeviceCountListeners: Set<(count: number) => void> = new Set();
   private deviceCharacteristics: Map<string, Characteristic> = new Map(); // deviceId -> Characteristic
+  private reconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map(); // deviceId -> reconnect timer
+  private reconnectAttempts: Map<string, number> = new Map(); // deviceId -> reconnect attempt count
+  private manualDisconnects: Set<string> = new Set(); // deviceId -> manually disconnected devices
+  private reconnectCallbacks: Map<string, (device: Device, deviceId: string, message: string) => void> = new Map(); // deviceId -> callback
+  private maxReconnectAttempts: number = 10;
+  private baseReconnectDelay: number = 1000; // 1 second
+  private connectedDeviceCount: number = 0; // Connected device counter
+  private processedMessageIds: Set<string> = new Set(); // Track processed messages to prevent duplicates
   
   // constructor() {
   //   this.manager = new BleManager();
   //   this.setupStateListener();
   // }
 
-  private setupStateListener() {
-    this.stateSubscription = this.manager.onStateChange((state: State) => {
+  /**
+   * Auto-start advertising and scanning when Bluetooth is ready
+   */
+  private setupAutoStart() {
+    this.stateSubscription = this.manager.onStateChange(async (state: State) => {
       console.log('BLE State:', state);
       if (state === State.PoweredOn) {
-        console.log('Bluetooth is powered on');
+        console.log('Bluetooth is powered on - auto-starting...');
+        try {
+          // Wait a bit for permissions to be ready
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Start advertising
+          await this.startAdvertising(ADVERTISEMENT_MESSAGE);
+          
+          // Start scanning and auto-connecting
+          await this.startScanning((device, deviceId, message) => {
+            // Device connected callback
+            console.log(`Auto-connected to device: ${deviceId}`);
+          });
+        } catch (error) {
+          console.error('Error auto-starting BLE:', error);
+          // Don't throw - auto-start failures should be non-blocking
+        }
       } else if (state === State.PoweredOff) {
         console.log('Bluetooth is powered off');
       }
@@ -337,33 +376,39 @@ class BLEService {
       // Store characteristic for this device
       this.deviceCharacteristics.set(deviceId, targetCharacteristic);
 
-      // Read initial message
-      // For long messages, we may need to read in chunks, but react-native-ble-plx handles this automatically
-      try {
-        const messageValue = await targetCharacteristic.read();
-        // react-native-ble-plx returns base64-encoded value
-        // For longer messages, it should handle multiple reads automatically
-        let message: string;
-        if (messageValue.value) {
-          try {
-            // Try base64 decode first (react-native-ble-plx format)
-            const decoded = Buffer.from(messageValue.value, 'base64');
-            message = decoded.toString('utf-8');
-          } catch (e) {
-            // If base64 decode fails, try direct UTF-8
-            message = Buffer.from(messageValue.value, 'utf-8').toString('utf-8');
+        // Read initial message
+        // For long messages, we may need to read in chunks, but react-native-ble-plx handles this automatically
+        try {
+          const messageValue = await targetCharacteristic.read();
+          // react-native-ble-plx returns the value as a base64-encoded string
+          // The Android server now sends raw UTF-8 bytes, and react-native-ble-plx base64-encodes them for JS
+          // So we just need to decode once from base64
+          let message: string = '';
+          if (messageValue.value) {
+            try {
+              // Decode from base64 (react-native-ble-plx always returns base64)
+              const decoded = Buffer.from(messageValue.value, 'base64');
+              message = decoded.toString('utf-8');
+            } catch (e) {
+              // If base64 decode fails, try using the value directly as UTF-8
+              console.warn(`⚠️ Failed to decode base64, using raw value: ${e}`);
+              message = messageValue.value;
+            }
+          } else {
+            message = '';
           }
-        } else {
-          message = '';
-        }
-        console.log(`✅ Read message from ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars, ${messageValue.value?.length || 0} bytes)`);
+          console.log(`✅ Read message from ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars)`);
 
         // Add to connected devices
         this.connectedDevices.set(deviceId, connectedDevice);
-
+        this.connectedDeviceCount = this.connectedDevices.size;
+        
         // Notify listeners
         this.connectionListeners.forEach((listener) => {
           listener(deviceId, true);
+        });
+        this.connectedDeviceCountListeners.forEach((listener) => {
+          listener(this.connectedDeviceCount);
         });
 
         // Set up notifications for message updates
@@ -375,7 +420,19 @@ class BLEService {
         console.error(`Error reading message from ${deviceId}:`, error);
       }
 
-      // Set up disconnect monitoring
+      // Store callback for reconnection
+      this.reconnectCallbacks.set(deviceId, onDeviceFound);
+      
+      // Reset reconnect attempts on successful connection
+      this.reconnectAttempts.set(deviceId, 0);
+      
+      // Clear any existing reconnect timer
+      if (this.reconnectTimers.has(deviceId)) {
+        clearTimeout(this.reconnectTimers.get(deviceId)!);
+        this.reconnectTimers.delete(deviceId);
+      }
+
+      // Set up disconnect monitoring with auto-reconnect
       connectedDevice.onDisconnected((error, device) => {
         if (error) {
           console.error(`Device ${deviceId} disconnected with error:`, error);
@@ -385,11 +442,25 @@ class BLEService {
         
         this.connectedDevices.delete(deviceId);
         this.deviceCharacteristics.delete(deviceId);
+        this.connectedDeviceCount = this.connectedDevices.size;
         
         // Notify listeners
         this.connectionListeners.forEach((listener) => {
           listener(deviceId, false);
         });
+        this.connectedDeviceCountListeners.forEach((listener) => {
+          listener(this.connectedDeviceCount);
+        });
+        
+        // Auto-reconnect if not manually disconnected and scanning is active
+        if (!this.manualDisconnects.has(deviceId) && this.isScanning) {
+          this.attemptReconnect(deviceId, device);
+        } else {
+          // Clean up if manually disconnected
+          this.manualDisconnects.delete(deviceId);
+          this.reconnectCallbacks.delete(deviceId);
+          this.reconnectAttempts.delete(deviceId);
+        }
       });
 
     } catch (error) {
@@ -413,23 +484,22 @@ class BLEService {
 
         if (characteristic && characteristic.value) {
           try {
-            // react-native-ble-plx returns base64-encoded value
-            // Decode it to get the actual message
-            let message = '';
+            // react-native-ble-plx returns the value as a base64-encoded string
+            // The Android server now sends raw UTF-8 bytes, and react-native-ble-plx base64-encodes them for JS
+            // So we just need to decode once from base64
+            let messageData = '';
             try {
+              // Decode from base64 (react-native-ble-plx always returns base64)
               const decoded = Buffer.from(characteristic.value, 'base64');
-              message = decoded.toString('utf-8');
+              messageData = decoded.toString('utf-8');
             } catch (e) {
-              // If base64 decode fails, try treating as UTF-8 directly
-              console.warn(`Failed to decode base64 in notification, trying UTF-8: ${e}`);
-              message = characteristic.value;
+              // If base64 decode fails, try using the value directly as UTF-8
+              console.warn(`⚠️ Failed to decode base64 in notification: ${e}`);
+              messageData = characteristic.value;
             }
-            console.log(`📨 Message received from ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars)`);
-
-            // Notify listeners
-            this.messageListeners.forEach((listener) => {
-              listener(deviceId, message);
-            });
+            
+            // Parse routed message
+            this.handleRoutedMessage(messageData, deviceId);
           } catch (error) {
             console.error(`Error parsing message from ${deviceId}:`, error);
           }
@@ -443,22 +513,199 @@ class BLEService {
   }
 
   /**
-   * Disconnect from a device
+   * Handle a routed message - parse, check origin/hops, and broadcast if needed
+   */
+  private handleRoutedMessage(messageData: string, senderDeviceId: string): void {
+    try {
+      // Try to parse as JSON (routed message)
+      let routedMessage: RoutedMessage;
+      try {
+        routedMessage = JSON.parse(messageData);
+        // Validate routed message structure
+        if (!routedMessage.origin || typeof routedMessage.hops !== 'number' || !routedMessage.message) {
+          throw new Error('Invalid routed message format');
+        }
+      } catch (e) {
+        // If not JSON or invalid format, treat as plain message from sender
+        // Create a routed message with origin = sender and hops = 0
+        routedMessage = {
+          origin: senderDeviceId,
+          hops: 0,
+          message: messageData,
+          timestamp: Date.now(),
+        };
+      }
+
+      // Create unique message ID (origin + timestamp + first 10 chars of message)
+      const messageId = `${routedMessage.origin}-${routedMessage.timestamp}-${routedMessage.message.substring(0, 10)}`;
+      
+      // Check if we've already processed this message
+      if (this.processedMessageIds.has(messageId)) {
+        console.log(`⚠️ Ignoring duplicate message: ${messageId}`);
+        return;
+      }
+
+      // Check if message originated from this device (prevent loops)
+      if (routedMessage.origin === DEVICE_ID) {
+        console.log(`⚠️ Ignoring message from self: ${routedMessage.message.substring(0, 50)}...`);
+        return;
+      }
+
+      // Check hop count (max 5)
+      if (routedMessage.hops >= MAX_HOPS) {
+        console.log(`⚠️ Message exceeded max hops (${routedMessage.hops}): ${routedMessage.message.substring(0, 50)}...`);
+        return;
+      }
+
+      // Mark message as processed
+      this.processedMessageIds.add(messageId);
+      
+      // Clean up old message IDs (keep last 100)
+      if (this.processedMessageIds.size > 100) {
+        const idsArray = Array.from(this.processedMessageIds);
+        this.processedMessageIds.clear();
+        idsArray.slice(-100).forEach(id => this.processedMessageIds.add(id));
+      }
+
+      console.log(`📨 Message received from ${senderDeviceId} (origin: ${routedMessage.origin}, hops: ${routedMessage.hops}): ${routedMessage.message.substring(0, 50)}...`);
+
+      // Notify listeners with the actual message text, origin, and sender
+      this.messageListeners.forEach((listener) => {
+        listener(routedMessage.message, routedMessage.origin, senderDeviceId);
+      });
+
+      // Broadcast to all other connected devices (except sender)
+      this.broadcastMessage(routedMessage, senderDeviceId);
+    } catch (error) {
+      console.error(`Error handling routed message:`, error);
+    }
+  }
+
+  /**
+   * Broadcast a message to all connected devices (except sender)
+   */
+  private async broadcastMessage(routedMessage: RoutedMessage, senderDeviceId: string): Promise<void> {
+    // Increment hop count for rebroadcast
+    const broadcastMessage: RoutedMessage = {
+      ...routedMessage,
+      hops: routedMessage.hops + 1,
+    };
+
+    // Don't broadcast if max hops reached
+    if (broadcastMessage.hops > MAX_HOPS) {
+      return;
+    }
+
+    // Serialize message to JSON
+    const messageJson = JSON.stringify(broadcastMessage);
+
+    // Broadcast to all connected devices except sender
+    const broadcastPromises: Promise<void>[] = [];
+    this.connectedDevices.forEach((device, deviceId) => {
+      if (deviceId !== senderDeviceId) {
+        broadcastPromises.push(
+          this.sendMessage(deviceId, messageJson).catch((error) => {
+            console.error(`Error broadcasting to ${deviceId}:`, error);
+          })
+        );
+      }
+    });
+
+    // Wait for all broadcasts (don't block on errors)
+    await Promise.allSettled(broadcastPromises);
+    console.log(`📡 Broadcasted message to ${broadcastPromises.length} device(s)`);
+  }
+
+  /**
+   * Attempt to reconnect to a device with exponential backoff
+   */
+  private async attemptReconnect(deviceId: string, device: Device): Promise<void> {
+    const attempts = this.reconnectAttempts.get(deviceId) || 0;
+    
+    if (attempts >= this.maxReconnectAttempts) {
+      console.log(`❌ Max reconnect attempts (${this.maxReconnectAttempts}) reached for device ${deviceId}`);
+      this.reconnectCallbacks.delete(deviceId);
+      this.reconnectAttempts.delete(deviceId);
+      return;
+    }
+    
+    // Calculate exponential backoff delay: 1s, 2s, 4s, 8s, 16s, etc. (max 30s)
+    const delay = Math.min(this.baseReconnectDelay * Math.pow(2, attempts), 30000);
+    const nextAttempt = attempts + 1;
+    
+    console.log(`🔄 Attempting to reconnect to ${deviceId} (attempt ${nextAttempt}/${this.maxReconnectAttempts}) in ${delay}ms...`);
+    
+    this.reconnectAttempts.set(deviceId, nextAttempt);
+    
+    const timer = setTimeout(async () => {
+      try {
+        // Check if scanning is still active
+        if (!this.isScanning) {
+          console.log(`⏹️ Scanning stopped, cancelling reconnect for ${deviceId}`);
+          this.reconnectCallbacks.delete(deviceId);
+          this.reconnectAttempts.delete(deviceId);
+          return;
+        }
+        
+        // Check if already reconnected
+        if (this.connectedDevices.has(deviceId)) {
+          console.log(`✅ Device ${deviceId} already reconnected`);
+          this.reconnectCallbacks.delete(deviceId);
+          this.reconnectAttempts.delete(deviceId);
+          return;
+        }
+        
+        // Get the callback for this device
+        const callback = this.reconnectCallbacks.get(deviceId);
+        if (!callback) {
+          console.log(`❌ No reconnect callback for device ${deviceId}`);
+          return;
+        }
+        
+        // Try to reconnect
+        console.log(`🔄 Reconnecting to device ${deviceId}...`);
+        await this.connectToDevice(device, callback);
+      } catch (error) {
+        console.error(`❌ Reconnect attempt failed for ${deviceId}:`, error);
+        // Schedule next reconnect attempt
+        this.attemptReconnect(deviceId, device);
+      }
+    }, delay);
+    
+    this.reconnectTimers.set(deviceId, timer);
+  }
+
+  /**
+   * Disconnect from a device (manual disconnect - no auto-reconnect)
    */
   async disconnectDevice(deviceId: string): Promise<void> {
     try {
+      // Mark as manual disconnect to prevent auto-reconnect
+      this.manualDisconnects.add(deviceId);
+      
+      // Clear any pending reconnect timers
+      if (this.reconnectTimers.has(deviceId)) {
+        clearTimeout(this.reconnectTimers.get(deviceId)!);
+        this.reconnectTimers.delete(deviceId);
+      }
+      
       const device = this.connectedDevices.get(deviceId);
       if (!device) {
         console.log(`Device ${deviceId} not connected`);
+        this.manualDisconnects.delete(deviceId);
         return;
       }
 
       await device.cancelConnection();
       this.connectedDevices.delete(deviceId);
       this.deviceCharacteristics.delete(deviceId);
+      this.reconnectCallbacks.delete(deviceId);
+      this.reconnectAttempts.delete(deviceId);
+      this.manualDisconnects.delete(deviceId);
       console.log(`Disconnected from device: ${deviceId}`);
     } catch (error) {
       console.error(`Error disconnecting from device ${deviceId}:`, error);
+      this.manualDisconnects.delete(deviceId);
     }
   }
 
@@ -470,12 +717,23 @@ class BLEService {
       this.manager.stopDeviceScan();
       this.scanSubscription = null;
       this.isScanning = false;
+      
+      // Clear all reconnect timers when stopping scan
+      this.reconnectTimers.forEach((timer) => {
+        clearTimeout(timer);
+      });
+      this.reconnectTimers.clear();
+      this.reconnectCallbacks.clear();
+      this.reconnectAttempts.clear();
+      this.manualDisconnects.clear();
+      
       console.log('Stopped scanning');
     }
   }
 
   /**
    * Send a message to a connected device via GATT
+   * If message is a plain string, it will be wrapped in a RoutedMessage with this device as origin
    */
   async sendMessage(deviceId: string, message: string): Promise<void> {
     try {
@@ -484,16 +742,45 @@ class BLEService {
         throw new Error(`Device ${deviceId} not connected or characteristic not found`);
       }
 
+      // If message is not JSON (plain text), wrap it in a RoutedMessage
+      let messageToSend: string = message;
+      try {
+        const parsed = JSON.parse(message);
+        // Check if it's already a valid RoutedMessage
+        if (!parsed.origin || typeof parsed.hops !== 'number' || !parsed.message) {
+          // Not a valid RoutedMessage, wrap it
+          const routedMessage: RoutedMessage = {
+            origin: DEVICE_ID,
+            hops: 0,
+            message: message,
+            timestamp: Date.now(),
+          };
+          messageToSend = JSON.stringify(routedMessage);
+        } else {
+          // Already a valid RoutedMessage, use as-is
+          messageToSend = message;
+        }
+      } catch (e) {
+        // Not JSON, wrap it in a RoutedMessage
+        const routedMessage: RoutedMessage = {
+          origin: DEVICE_ID,
+          hops: 0,
+          message: message,
+          timestamp: Date.now(),
+        };
+        messageToSend = JSON.stringify(routedMessage);
+      }
+
       // react-native-ble-plx expects base64-encoded string for write operations
       // Convert message to UTF-8 bytes, then to base64
-      const messageBytes = Buffer.from(message, 'utf-8');
+      const messageBytes = Buffer.from(messageToSend, 'utf-8');
       const base64Message = messageBytes.toString('base64');
       
       // Write to characteristic
       // react-native-ble-plx and Android BLE stack handle long writes automatically
       // With larger MTU (517 bytes), we can send much longer messages (up to ~512 bytes payload)
       await characteristic.writeWithResponse(base64Message);
-      console.log(`✅ Message sent to ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars, ${messageBytes.length} bytes)`);
+      console.log(`✅ Message sent to ${deviceId}: ${message.substring(0, 50)}... (${messageBytes.length} bytes)`);
     } catch (error: any) {
       console.error('Error sending message:', error);
       throw error;
@@ -501,7 +788,8 @@ class BLEService {
   }
 
   /**
-   * Send a message from the advertising device (update GATT server)
+   * Send a message from the advertising device (broadcast to all connected devices)
+   * This creates a new message with this device as origin and broadcasts it
    */
   async sendMessageFromServer(message: string): Promise<void> {
     try {
@@ -509,13 +797,40 @@ class BLEService {
         throw new Error('Not advertising. Start advertising first to send messages.');
       }
       
+      // Create a routed message with this device as origin
+      const routedMessage: RoutedMessage = {
+        origin: DEVICE_ID,
+        hops: 0,
+        message: message,
+        timestamp: Date.now(),
+      };
+
+      // Serialize to JSON
+      const messageJson = JSON.stringify(routedMessage);
+
+      // Broadcast to all connected devices
+      const broadcastPromises: Promise<void>[] = [];
+      this.connectedDevices.forEach((device, deviceId) => {
+        broadcastPromises.push(
+          this.sendMessage(deviceId, messageJson).catch((error) => {
+            console.error(`Error sending to ${deviceId}:`, error);
+          })
+        );
+      });
+
+      // Also update GATT server message for new connections
       if (Platform.OS === 'android' && BleAdvertise.isAvailable()) {
-        // Update the GATT server message (will notify all connected devices)
-        await BleAdvertise.setMessage(message);
-        console.log(`✅ Message updated on GATT server: ${message.substring(0, 50)}... (${message.length} chars)`);
-      } else {
-        throw new Error('Native advertising not available. Cannot send messages.');
+        await BleAdvertise.setMessage(messageJson);
       }
+
+      // Wait for all sends (don't block on errors)
+      await Promise.allSettled(broadcastPromises);
+      console.log(`✅ Broadcasted message to ${broadcastPromises.length} device(s): ${message.substring(0, 50)}...`);
+      
+      // Notify local listeners (for UI update)
+      this.messageListeners.forEach((listener) => {
+        listener(message, DEVICE_ID, DEVICE_ID);
+      });
     } catch (error: any) {
       console.error('Error sending message from server:', error);
       throw error;
@@ -524,11 +839,22 @@ class BLEService {
 
   /**
    * Add a message listener
+   * Listener receives: (message: string, originDeviceId: string, senderDeviceId: string)
    */
-  onMessageReceived(listener: (deviceId: string, message: string) => void): () => void {
+  onMessageReceived(listener: (message: string, originDeviceId: string, senderDeviceId: string) => void): () => void {
     this.messageListeners.add(listener);
     return () => {
       this.messageListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Add a connected device count listener
+   */
+  onConnectedDeviceCountChanged(listener: (count: number) => void): () => void {
+    this.connectedDeviceCountListeners.add(listener);
+    return () => {
+      this.connectedDeviceCountListeners.delete(listener);
     };
   }
 
@@ -554,6 +880,13 @@ class BLEService {
    */
   getConnectedDevices(): Device[] {
     return Array.from(this.connectedDevices.values());
+  }
+
+  /**
+   * Get connected device count
+   */
+  getConnectedDeviceCount(): number {
+    return this.connectedDeviceCount;
   }
 
   /**
@@ -590,6 +923,15 @@ class BLEService {
   destroy(): void {
     this.stopScanning();
     this.stopAdvertising();
+    
+    // Clear reconnect timers
+    this.reconnectTimers.forEach((timer) => {
+      clearTimeout(timer);
+    });
+    this.reconnectTimers.clear();
+    this.reconnectCallbacks.clear();
+    this.reconnectAttempts.clear();
+    this.manualDisconnects.clear();
     
     // Disconnect all devices
     this.connectedDevices.forEach((device, deviceId) => {

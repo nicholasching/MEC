@@ -1,4 +1,5 @@
-// Using native Text/View for a simplified UI
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { ConnectedDevice, DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -9,6 +10,8 @@ export default function HomeScreen() {
     isScanning,
     discoveredDevices,
     connectedDevices,
+    globalMessages,
+    connectedDeviceCount,
     advertisementMessage,
     startAdvertising,
     stopAdvertising,
@@ -19,7 +22,13 @@ export default function HomeScreen() {
     sendMessage,
   } = useBLE();
 
-  const [messageInput, setMessageInput] = useState(advertisementMessage);
+  const [messageInput, setMessageInput] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [globalMessages]);
 
   const handleStartAdvertising = async () => {
     try {
@@ -97,88 +106,59 @@ export default function HomeScreen() {
     }
   };
 
+  const handleSendMessage = async () => {
+    if (messageInput.trim()) {
+      try {
+        await sendMessage(messageInput.trim());
+        setMessageInput('');
+        // Scroll to bottom after sending
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      } catch (error) {
+        console.error('Error sending message:', error);
+        // Don't clear input on error so user can retry
+      }
+    }
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
-      {/* Orange Gradient Semi-Circle */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 300, overflow: 'hidden', zIndex: 0 }}>
-        <View
-          style={{
-            position: 'absolute',
-            top: -200,
-            left: '50%',
-            width: 400,
-            height: 400,
-            borderRadius: 200,
-            backgroundColor: '#ff9500',
-            opacity: 0.25,
-            transform: [{ translateX: -200 }],
-            shadowColor: '#ff9500',
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.3,
-            shadowRadius: 80,
-            elevation: 20,
-          }}
-        />
-        {/* Inner gradient layer for fade effect */}
-        <View
-          style={{
-            position: 'absolute',
-            top: -180,
-            left: '50%',
-            width: 350,
-            height: 350,
-            borderRadius: 175,
-            backgroundColor: '#ff9000',
-            opacity: 0.2,
-            transform: [{ translateX: -175 }],
-          }}
-        />
-      </View>
-      <ScrollView style={{ flex: 1, zIndex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-      <View style={{ padding: 16, marginBottom: 8 }}>
-        <Text style={{ fontSize: 16, fontWeight: '300', color: '#fff', margin: "auto" }}>Emergency Chat</Text>
-        <Text style={{ fontWeight: '500', marginBottom: 32, marginTop: 64, fontSize: 32, color: '#fff', textAlign: 'center' }}>Local communication, always ready when you need it.</Text>
-        {/* <ThemedText style={styles.subtitle}>Device ID: {deviceId}</ThemedText>
+    <ScrollView style={styles.container}>
+      <ThemedView style={styles.section}>
+        <ThemedText type="title" style={styles.title}>BLE Relay</ThemedText>
+        <ThemedText style={styles.subtitle}>Device ID: {deviceId}</ThemedText>
         <ThemedText style={styles.infoText}>GATT-based communication</ThemedText>
         <ThemedText style={styles.infoText}>Service UUID: {serviceUuid}</ThemedText>
         <ThemedText style={styles.infoText}>Characteristic UUID: {characteristicUuid}</ThemedText>
-        <ThemedText style={styles.infoText}>Devices advertise service UUID, then connect via GATT for messaging</ThemedText> */}
-        {/* <ThemedText style={styles.subtitle}>Users Connected:</ThemedText>
-        <ThemedText style={styles.subtitle}>1000000</ThemedText> */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, marginTop: 32}}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <ThemedText style={styles.infoText}>Devices advertise service UUID, then connect via GATT for messaging</ThemedText>
+      </ThemedView>
 
-
-            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 2}}>
-              <Text style={{ fontSize: 18, fontWeight: '400', color: '#ddd' }}>Users{"\n"}connected</Text>
-              <Text style={{ fontSize: 48, fontWeight: '700', color: '#fff' }}>78</Text>
-            </View>
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, marginTop: 32}}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-
-
-            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 2}}>
-              <Text style={{ fontSize: 32, fontWeight: '400', color: '#ddd', padding: 16, margin: "auto"}}>Join</Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      {error && (
+        <ThemedView style={styles.errorSection}>
+          <ThemedText style={styles.errorText}>Error: {error}</ThemedText>
+        </ThemedView>
+      )}
 
       {/* Advertising Section */}
-      <View style={{ padding: 16, marginBottom: 8, marginTop: 1000 }}>
-        <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, color: '#fff' }}>Advertising</Text>
-
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Advertising</ThemedText>
+        <ThemedText style={styles.description}>
+          {Platform.OS === 'android' 
+            ? 'Advertise this device with GATT server. Devices will automatically connect when discovered.'
+            : '⚠️ iOS: Simulated mode only - this device will NOT be discoverable. Native GATT server requires Android.'}
+        </ThemedText>
         
         <TextInput
-          style={{ borderWidth: 1, borderColor: '#333', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#1a1a1a', color: '#fff' }}
+          style={styles.input}
           value={messageInput}
           onChangeText={setMessageInput}
           placeholder="Initial message (stored in GATT characteristic)"
-          placeholderTextColor="#666"
+          placeholderTextColor="#999"
           maxLength={500}
         />
+        <ThemedText style={styles.infoText}>
+          Note: Messages are sent via GATT characteristics (up to ~512 bytes per write). Initial message is stored in the characteristic.
+        </ThemedText>
 
         <View style={{ flexDirection: 'row', marginTop: 12 }}>
           {!isAdvertising ? (
@@ -201,19 +181,24 @@ export default function HomeScreen() {
         {isAdvertising && (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
             <ActivityIndicator size="small" color="#007AFF" />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={{ fontSize: 14, color: '#ccc' }}>Advertising: {advertisementMessage}</Text>
+            <ThemedView style={styles.statusTextContainer}>
+              <ThemedText style={styles.statusText}>Advertising: {advertisementMessage}</ThemedText>
               {Platform.OS !== 'android' && (
-                <Text style={{ fontSize: 12, color: '#FF9500', fontWeight: '600', marginTop: 4 }}>⚠️ Simulated mode - device not discoverable</Text>
+                <ThemedText style={styles.warningText}>
+                  ⚠️ Simulated mode - device not discoverable
+                </ThemedText>
               )}
-            </View>
-          </View>
+            </ThemedView>
+          </ThemedView>
         )}
       </View>
 
       {/* Scanning Section */}
-      <View style={{ padding: 16, marginBottom: 8 }}>
-        <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, color: '#fff' }}>Scanning</Text>
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Scanning</ThemedText>
+        <ThemedText style={styles.description}>
+          Scan for nearby BLE devices advertising the service UUID. Devices will automatically connect and exchange messages via GATT.
+        </ThemedText>
 
         <View style={{ flexDirection: 'row', marginTop: 12 }}>
           {!isScanning ? (
@@ -239,28 +224,33 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 14, color: '#ccc', marginLeft: 12 }}>Scanning for devices...</Text>
           </View>
         )}
-      </View>
+      </ThemedView>
 
       {/* Discovered Devices Section */}
       {discoveredDevices.length > 0 && (
-        <View style={{ padding: 16, marginBottom: 8 }}>
-          <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, color: '#fff' }}>
+        <ThemedView style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
             Discovered Devices ({discoveredDevices.length})
-          </Text>
-          <Text style={{ fontSize: 14, color: '#999', lineHeight: 20, marginBottom: 12 }}>
+          </ThemedText>
+          <ThemedText style={styles.infoText}>
             Note: Devices are automatically connected when discovered. These are devices that were discovered but not yet fully connected.
-          </Text>
+          </ThemedText>
           {discoveredDevices.map((device, index) => (
-            <View key={device.device.id || index} style={{ borderWidth: 1, borderColor: '#333', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#111' }}>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#fff' }}>{device.name}</Text>
-              <Text style={{ fontSize: 14, color: '#999', marginTop: 4 }}>ID: {device.deviceId}</Text>
-              <Text style={{ fontSize: 14, color: '#aaa', marginTop: 4 }}>Initial Message: {device.message || 'No message'}</Text>
-              <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start', marginTop: 8, backgroundColor: '#34C759' }} onPress={() => handleConnect(device)}>
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Connect</Text>
+            <ThemedView key={device.device.id} style={styles.deviceCard}>
+              <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
+              <ThemedText style={styles.deviceId}>ID: {device.deviceId}</ThemedText>
+              <ThemedText style={styles.deviceMessage}>Initial Message: {device.message || 'No message'}</ThemedText>
+              <TouchableOpacity 
+                style={[styles.button, styles.buttonSuccess, styles.deviceButton]}
+                onPress={() => handleConnect(device)}
+              >
+                <ThemedText style={styles.buttonText}>
+                  Connect (Auto-connect enabled)
+                </ThemedText>
               </TouchableOpacity>
-            </View>
+            </ThemedView>
           ))}
-        </View>
+        </ThemedView>
       )}
 
       {/* Connected Devices Section */}
@@ -268,33 +258,231 @@ export default function HomeScreen() {
         <View style={{ padding: 16, marginBottom: 8 }}>
           <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, color: '#fff' }}>Connected Devices ({connectedDevices.length})</Text>
           {connectedDevices.map((device, index) => (
-            <DeviceChat
-              key={device.deviceId || device.device.id || `device-${index}`}
-              device={device}
-              onSendMessage={(message) => sendMessage(device.deviceId || device.device.id, message)}
-              onDisconnect={() => handleDisconnect(device.deviceId, device.name)}
-            />
+            <ThemedView key={device.deviceId || device.device.id || `device-${index}`} style={styles.deviceCard}>
+              <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
+              <ThemedText style={styles.deviceId}>ID: {device.deviceId}</ThemedText>
+              <TouchableOpacity 
+                style={[styles.button, styles.buttonDanger, styles.deviceButton]}
+                onPress={() => handleDisconnect(device.deviceId, device.name)}
+              >
+                <ThemedText style={styles.buttonText}>Disconnect</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
           ))}
         </View>
       )}
 
       {/* Info Section */}
-      <View style={{ padding: 16, marginBottom: 8 }}>
-        <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, color: '#fff' }}>Information</Text>
-        <Text style={{ fontSize: 14, color: '#999', lineHeight: 20 }}>
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Information</ThemedText>
+        <ThemedText style={styles.infoText}>
           • Make sure Bluetooth is enabled on your device{'\n'}
           • Grant Bluetooth and location permissions (required for BLE on Android){'\n'}
-          • Devices advertise with service UUID and accept automatic connections{'\n'}
-          • Messages are exchanged via GATT characteristics{'\n'}
           • Devices will be discovered when advertising and within range (~10 meters)
-        </Text>
-      </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ThemedText>
+      </ThemedView>
+    </ScrollView>
   );
 }
 
-// All styles are now inlined in the components above
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  section: {
+    padding: 16,
+    marginBottom: 8,
+    gap: 12,
+  },
+  title: {
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  sectionTitle: {
+    marginBottom: 4,
+  },
+  description: {
+    fontSize: 14,
+    opacity: 0.8,
+    marginBottom: 8,
+  },
+  errorSection: {
+    backgroundColor: '#ffebee',
+    padding: 16,
+    margin: 16,
+    borderRadius: 8,
+  },
+  errorText: {
+    color: '#c62828',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: Platform.select({ ios: '#fff', android: '#fff', default: '#fff' }),
+    color: Platform.select({ ios: '#000', android: '#000', default: '#000' }),
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  button: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 120,
+  },
+  buttonPrimary: {
+    backgroundColor: '#007AFF',
+  },
+  buttonDanger: {
+    backgroundColor: '#FF3B30',
+  },
+  buttonSuccess: {
+    backgroundColor: '#34C759',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    opacity: 0.8,
+  },
+  statusTextContainer: {
+    flex: 1,
+    gap: 4,
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#FF9500',
+    fontWeight: '600',
+  },
+  deviceCard: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  deviceName: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  deviceId: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  deviceMessage: {
+    fontSize: 14,
+    opacity: 0.8,
+  },
+  deviceButton: {
+    marginTop: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    opacity: 0.7,
+    lineHeight: 20,
+  },
+  chatContainer: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  chatMessages: {
+    maxHeight: 300,
+    minHeight: 100,
+    marginBottom: 8,
+    padding: 4,
+  },
+  emptyMessagesContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  message: {
+    padding: 10,
+    marginBottom: 8,
+    borderRadius: 12,
+    maxWidth: '80%',
+    minWidth: 50,
+  },
+  messageSent: {
+    backgroundColor: '#007AFF',
+    alignSelf: 'flex-end',
+    marginLeft: '20%',
+  },
+  messageReceived: {
+    backgroundColor: '#E5E5EA',
+    alignSelf: 'flex-start',
+    marginRight: '20%',
+  },
+  messageText: {
+    color: '#000',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  messageTextSent: {
+    color: '#fff',
+  },
+  chatInputContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chatInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    backgroundColor: Platform.select({ ios: '#fff', android: '#fff', default: '#fff' }),
+    color: Platform.select({ ios: '#000', android: '#000', default: '#000' }),
+    minHeight: 40,
+    maxHeight: 100,
+  },
+  sendButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    justifyContent: 'center',
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.5,
+  },
+});
 
 // Device Chat Component
 function DeviceChat({
@@ -331,23 +519,23 @@ function DeviceChat({
   };
 
   return (
-    <View style={{ borderWidth: 1, borderColor: '#333', borderRadius: 8, padding: 12, marginBottom: 12, backgroundColor: '#111' }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#222' }}>
+    <ThemedView style={styles.deviceCard}>
+      <View style={styles.chatHeader}>
         <View>
-          <Text style={{ fontSize: 18, fontWeight: '600', color: '#fff' }}>{device.name}</Text>
-          <Text style={{ fontSize: 14, color: '#999', marginTop: 2 }}>ID: {device.deviceId}</Text>
+          <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
+          <ThemedText style={styles.deviceId}>ID: {device.deviceId}</ThemedText>
         </View>
         <TouchableOpacity
-          style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FF3B30' }}
+          style={[styles.button, styles.buttonDanger]}
           onPress={onDisconnect}
         >
-          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Disconnect</Text>
+          <ThemedText style={styles.buttonText}>Disconnect</ThemedText>
         </TouchableOpacity>
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: '#333', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+      <ThemedView style={styles.chatContainer}>
         <ScrollView 
-          style={{ maxHeight: 300, minHeight: 100, marginBottom: 8, padding: 4 }}
+          style={styles.chatMessages}
           ref={scrollViewRef}
           onContentSizeChange={() => {
             setTimeout(() => {
@@ -357,47 +545,52 @@ function DeviceChat({
           nestedScrollEnabled
         >
           {device.messages.length === 0 ? (
-            <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 14, color: '#999', lineHeight: 20 }}>No messages yet. Start a conversation!</Text>
-            </View>
+            <ThemedView style={styles.emptyMessagesContainer}>
+              <ThemedText style={styles.infoText}>No messages yet. Start a conversation!</ThemedText>
+            </ThemedView>
           ) : (
             device.messages.map((msg, index) => (
               <View
                 key={`${msg.timestamp}-${index}`}
                 style={[
-                  { padding: 10, marginBottom: 8, borderRadius: 12, maxWidth: '80%', minWidth: 50 },
-                  msg.sent ? { backgroundColor: '#007AFF', alignSelf: 'flex-end', marginLeft: '20%' } : { backgroundColor: '#333', alignSelf: 'flex-start', marginRight: '20%' },
+                  styles.message,
+                  msg.sent ? styles.messageSent : styles.messageReceived,
                 ]}
               >
-                <Text style={[{ fontSize: 14, lineHeight: 20 }, msg.sent ? { color: '#fff' } : { color: '#fff' }]}>
+                <ThemedText
+                  style={[
+                    styles.messageText,
+                    msg.sent && styles.messageTextSent,
+                  ]}
+                >
                   {msg.text}
-                </Text>
+                </ThemedText>
               </View>
             ))
           )}
         </ScrollView>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+        <View style={styles.chatInputContainer}>
           <TextInput
-            style={{ flex: 1, borderWidth: 1, borderColor: '#333', borderRadius: 8, padding: 10, fontSize: 14, backgroundColor: '#1a1a1a', color: '#fff', minHeight: 40, maxHeight: 100, marginRight: 8 }}
+            style={styles.chatInput}
             value={messageInput}
             onChangeText={setMessageInput}
             placeholder="Type a message..."
-            placeholderTextColor="#666"
+            placeholderTextColor="#999"
             onSubmitEditing={handleSend}
             multiline
             returnKeyType="send"
             blurOnSubmit={false}
           />
           <TouchableOpacity
-            style={[{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, justifyContent: 'center', minWidth: 60, alignItems: 'center' }, !messageInput.trim() ? { backgroundColor: '#666', opacity: 0.5 } : { backgroundColor: '#007AFF' }]}
+            style={[styles.sendButton, !messageInput.trim() && styles.sendButtonDisabled]}
             onPress={handleSend}
             disabled={!messageInput.trim()}
           >
-            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Send</Text>
+            <ThemedText style={[styles.buttonText, { fontSize: 14 }]}>Send</ThemedText>
           </TouchableOpacity>
         </View>
-      </View>
-    </View>
+      </ThemedView>
+    </ThemedView>
   );
 }

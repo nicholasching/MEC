@@ -79,10 +79,9 @@ class BleGattServer(private val context: Context) {
             )
             characteristic.addDescriptor(descriptor)
             
-            // Set initial value as base64-encoded (react-native-ble-plx expects base64)
+            // Set initial value as raw UTF-8 bytes - react-native-ble-plx will handle base64 encoding for JS bridge
             val initialMessageBytes = currentMessage.toByteArray(Charsets.UTF_8)
-            val initialBase64 = Base64.encodeToString(initialMessageBytes, Base64.NO_WRAP)
-            characteristic.value = initialBase64.toByteArray(Charsets.UTF_8)
+            characteristic.value = initialMessageBytes
             
             // Add characteristic to service
             service.addCharacteristic(characteristic)
@@ -131,15 +130,11 @@ class BleGattServer(private val context: Context) {
         val characteristic = service?.getCharacteristic(CHARACTERISTIC_UUID)
         
         if (characteristic != null) {
-            // Store message as base64-encoded bytes for consistency
-            // react-native-ble-plx expects base64-encoded values for both reads and notifications
+            // Store message as raw UTF-8 bytes - react-native-ble-plx will handle base64 encoding for JS bridge
             val messageBytes = message.toByteArray(Charsets.UTF_8)
-            val base64Encoded = Base64.encodeToString(messageBytes, Base64.NO_WRAP)
-            val base64Bytes = base64Encoded.toByteArray(Charsets.UTF_8)
-            characteristic.value = base64Bytes
+            characteristic.value = messageBytes
             
             // Notify all connected devices
-            // The notification will send the base64-encoded bytes
             connectedDevices.forEach { device ->
                 try {
                     gattServer?.notifyCharacteristicChanged(device, characteristic, false)
@@ -148,7 +143,7 @@ class BleGattServer(private val context: Context) {
                 }
             }
             
-            Log.d(TAG, "Message updated: ${message.take(50)}... (${message.length} chars, ${messageBytes.size} bytes UTF-8, ${base64Bytes.size} bytes base64)")
+            Log.d(TAG, "Message updated: ${message.take(50)}... (${message.length} chars, ${messageBytes.size} bytes UTF-8)")
         }
     }
     
@@ -205,24 +200,21 @@ class BleGattServer(private val context: Context) {
             characteristic: BluetoothGattCharacteristic
         ) {
             if (characteristic.uuid == CHARACTERISTIC_UUID) {
-                // react-native-ble-plx expects base64-encoded strings
-                // Convert message to UTF-8 bytes, then encode to base64
+                // Send raw UTF-8 bytes - react-native-ble-plx will handle base64 encoding for JS bridge
                 val messageBytes = currentMessage.toByteArray(Charsets.UTF_8)
-                val base64Encoded = Base64.encodeToString(messageBytes, Base64.NO_WRAP)
-                val base64Bytes = base64Encoded.toByteArray(Charsets.UTF_8)
                 
                 // Handle long reads - Android BLE stack handles chunking automatically
                 // We just need to return the correct portion based on offset
-                val responseValue = if (offset < base64Bytes.size) {
+                val responseValue = if (offset < messageBytes.size) {
                     // Return from offset to end (Android will chunk based on MTU)
-                    base64Bytes.copyOfRange(offset, base64Bytes.size)
+                    messageBytes.copyOfRange(offset, messageBytes.size)
                 } else {
                     // Offset beyond data size - return empty
                     ByteArray(0)
                 }
                 
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, responseValue)
-                Log.d(TAG, "Characteristic read by ${device.address}, offset=$offset, response size=${responseValue.size}, total=${base64Bytes.size} bytes (message: ${currentMessage.length} chars)")
+                Log.d(TAG, "Characteristic read by ${device.address}, offset=$offset, response size=${responseValue.size}, total=${messageBytes.size} bytes (message: ${currentMessage.length} chars)")
             } else {
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null)
             }
@@ -259,9 +251,7 @@ class BleGattServer(private val context: Context) {
                     value
                 }
                 
-                // Store the raw bytes (base64-encoded string as UTF-8)
-                characteristic.value = newValue
-                
+                // react-native-ble-plx sends base64-encoded string as UTF-8 bytes
                 // Decode base64 to get the actual message
                 try {
                     val base64String = String(newValue, Charsets.UTF_8)
@@ -275,30 +265,22 @@ class BleGattServer(private val context: Context) {
                 
                 val message = currentMessage
                 
-                // Notify callback
+                // Update characteristic value with raw UTF-8 bytes (for notifications)
+                val messageBytes = message.toByteArray(Charsets.UTF_8)
+                characteristic.value = messageBytes
+                
+                // Notify callback (React Native will handle broadcasting to other devices)
+                // Don't notify other devices here - let React Native handle routing to prevent loops
                 messageUpdateCallback?.invoke(message)
                 
                 if (responseNeeded) {
                     gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
                 }
                 
-                // Notify all other connected devices
-                // For notifications, we need to send base64-encoded value like we do for reads
-                // Update characteristic value with base64-encoded message for notifications
-                val messageBytes = message.toByteArray(Charsets.UTF_8)
-                val base64Encoded = Base64.encodeToString(messageBytes, Base64.NO_WRAP)
-                val base64Bytes = base64Encoded.toByteArray(Charsets.UTF_8)
-                characteristic.value = base64Bytes
-                
-                connectedDevices.forEach { connectedDevice ->
-                    if (connectedDevice != device) {
-                        try {
-                            gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Error notifying device ${connectedDevice.address}: ${e.message}")
-                        }
-                    }
-                }
+                // Note: We don't notify other connected devices here because:
+                // 1. React Native client will handle broadcasting with proper routing (origin tracking, hop count)
+                // 2. This prevents double-broadcasting and message loops
+                // 3. The React Native client has logic to prevent re-broadcasting messages from self
                 
                 Log.d(TAG, "Message received from ${device.address}: ${message.take(50)}... (${message.length} chars)")
             } else {

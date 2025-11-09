@@ -75,7 +75,7 @@ iOS advertising is not yet implemented. On iOS, the app uses **simulated adverti
    ```
 
 2. Start the app:
-   ```bash
+```bash
    pnpm start
    ```
 
