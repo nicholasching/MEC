@@ -96,6 +96,18 @@ export default function HomeScreen() {
     }
   };
 
+  const handleQuickMessage = async (message: string) => {
+    try {
+      await sendMessage(message);
+      setShowChatPage(true);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (error) {
+      console.error('Error sending quick message:', error);
+    }
+  };
+
   // Calculate signal strength based on connections
   const getSignalStrength = () => {
     if (!isAdvertising) return 'Off';
@@ -503,10 +515,7 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => {
-                  setMessageInput('HELP - Need assistance immediately');
-                  setShowChatPage(true);
-                }}
+                onPress={() => handleQuickMessage('HELP - Need assistance immediately')}
                 style={{
                   backgroundColor: '#991b1b',
                   paddingVertical: 12,
@@ -524,10 +533,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => {
-                  setMessageInput('MEDICAL EMERGENCY - Urgent medical help needed');
-                  setShowChatPage(true);
-                }}
+                onPress={() => handleQuickMessage('MEDICAL EMERGENCY - Urgent medical help needed')}
                 style={{
                   backgroundColor: '#991b1b',
                   paddingVertical: 12,
@@ -545,10 +551,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => {
-                  setMessageInput('TRAPPED - Cannot move, need rescue');
-                  setShowChatPage(true);
-                }}
+                onPress={() => handleQuickMessage('TRAPPED - Cannot move, need rescue')}
                 style={{
                   backgroundColor: '#991b1b',
                   paddingVertical: 12,
@@ -566,10 +569,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => {
-                  setMessageInput('FLOOD - Water rising, danger zone');
-                  setShowChatPage(true);
-                }}
+                onPress={() => handleQuickMessage('FLOOD - Water rising, danger zone')}
                 style={{
                   backgroundColor: '#991b1b',
                   paddingVertical: 12,
@@ -587,10 +587,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => {
-                  setMessageInput('FIRE - Active fire in area');
-                  setShowChatPage(true);
-                }}
+                onPress={() => handleQuickMessage('FIRE - Active fire in area')}
                 style={{
                   backgroundColor: '#991b1b',
                   paddingVertical: 12,
@@ -608,10 +605,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => {
-                  setMessageInput('MUST EVACUATE - Leave area immediately');
-                  setShowChatPage(true);
-                }}
+                onPress={() => handleQuickMessage('MUST EVACUATE - Leave area immediately')}
                 style={{
                   backgroundColor: '#991b1b',
                   paddingVertical: 12,
