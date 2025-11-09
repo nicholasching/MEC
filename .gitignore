@@ -45,3 +45,6 @@ app-example
 android/build
 
 modules/ble-advertise/android/build/
+android/app/build.gradle
+android/app/src/main/res/values/strings.xml
+android/settings.gradle
