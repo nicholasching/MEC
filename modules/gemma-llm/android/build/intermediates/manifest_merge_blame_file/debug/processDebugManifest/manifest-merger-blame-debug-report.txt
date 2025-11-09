@@ -1,0 +1,14 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.blerelay.gemma" >
+4
+5    <uses-sdk android:minSdkVersion="24" />
+6    <!-- Permissions for file access if needed -->
+7    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+7-->C:\Projects\MEC\modules\gemma-llm\android\src\main\AndroidManifest.xml:4:5-80
+7-->C:\Projects\MEC\modules\gemma-llm\android\src\main\AndroidManifest.xml:4:22-77
+8    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+8-->C:\Projects\MEC\modules\gemma-llm\android\src\main\AndroidManifest.xml:5:5-81
+8-->C:\Projects\MEC\modules\gemma-llm\android\src\main\AndroidManifest.xml:5:22-78
+9
+10</manifest>

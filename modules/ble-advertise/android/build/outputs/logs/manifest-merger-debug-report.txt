@@ -1,46 +1,46 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:2:1-18:12
-INJECTED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:2:1-18:12
+ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:2:1-18:12
+INJECTED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:2:1-18:12
 	package
-		INJECTED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml
+		INJECTED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml
 	xmlns:android
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:2:11-69
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:2:11-69
 uses-feature#android.hardware.bluetooth_le
-ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:4:5-6:36
+ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:4:5-6:36
 	android:required
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:6:9-33
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:6:9-33
 	android:name
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:5:9-53
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:5:9-53
 uses-permission#android.permission.BLUETOOTH
-ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:8:5-68
+ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:8:5-68
 	android:name
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:8:22-65
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:8:22-65
 uses-permission#android.permission.BLUETOOTH_ADMIN
-ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:9:5-74
+ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:9:5-74
 	android:name
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:9:22-71
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:9:22-71
 uses-permission#android.permission.BLUETOOTH_SCAN
-ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:12:5-13:58
+ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:12:5-13:58
 	android:usesPermissionFlags
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:13:9-55
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:13:9-55
 	android:name
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:12:22-70
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:12:22-70
 uses-permission#android.permission.BLUETOOTH_ADVERTISE
-ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:14:5-15:58
+ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:14:5-15:58
 	android:usesPermissionFlags
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:15:9-55
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:15:9-55
 	android:name
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:14:22-75
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:14:22-75
 uses-permission#android.permission.BLUETOOTH_CONNECT
-ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:16:5-76
+ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:16:5-76
 	android:name
-		ADDED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml:16:22-73
+		ADDED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml:16:22-73
 uses-sdk
-INJECTED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
-INJECTED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml
-INJECTED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml
+INJECTED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml
+INJECTED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml
 	android:targetSdkVersion
-		INJECTED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml
+		INJECTED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml
 	android:minSdkVersion
-		INJECTED from C:\Users\Nick\Documents\Projects\BLE-relay\modules\ble-advertise\android\src\main\AndroidManifest.xml
+		INJECTED from C:\Projects\MEC\modules\ble-advertise\android\src\main\AndroidManifest.xml
