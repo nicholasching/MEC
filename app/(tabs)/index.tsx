@@ -16,18 +16,12 @@ export default function HomeScreen() {
     deviceId,
     serviceUuid,
     characteristicUuid,
-    startAdvertising,
-    stopAdvertising,
-    startScanning,
-    stopScanning,
     connectToDevice,
     disconnectDevice,
     sendMessage,
-    setAdvertisementMessage,
   } = useBLE();
 
   const [messageInput, setMessageInput] = useState('');
-  const [broadcastInput, setBroadcastInput] = useState(advertisementMessage);
   
   // Fast, practical animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -58,58 +52,6 @@ export default function HomeScreen() {
     ).start();
   }, [fadeAnim, titleAnim, contentAnim, alertPulse]);
 
-  const handleStartAdvertising = async () => {
-    try {
-      console.log('🔄 handleStartAdvertising called');
-      console.log('🔄 Message:', broadcastInput || advertisementMessage);
-      
-      await startAdvertising(broadcastInput || advertisementMessage);
-      
-      console.log('🔄 startAdvertising completed successfully');
-      
-      if (Platform.OS === 'android') {
-        Alert.alert('Success', 'Started BLE advertising! Your device is now discoverable.');
-      } else {
-        Alert.alert('Success', 'Started advertising (simulated mode on iOS)');
-      }
-    } catch (err: any) {
-      console.error('❌ Error in handleStartAdvertising:', err);
-      console.error('❌ Error message:', err?.message);
-      console.error('❌ Error code:', err?.code);
-      console.error('❌ Full error:', err);
-      
-      const errorMessage = err?.message || err?.toString() || 'Failed to start advertising';
-      
-      if (errorMessage.includes('permission') || err?.code === 'PERMISSION_DENIED') {
-        console.log('Permission error handled by permission request function');
-      } else if (errorMessage.includes('too large')) {
-        Alert.alert(
-          'Message Too Long',
-          'Message is too large. Maximum message size is approximately 512 bytes per GATT write.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Error', errorMessage);
-      }
-    }
-  };
-
-  const handleStopAdvertising = async () => {
-    try {
-      await stopAdvertising();
-      Alert.alert('Success', 'Stopped advertising');
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to stop advertising');
-    }
-  };
-
-  const handleStartScanning = async () => {
-    try {
-      await startScanning();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to start scanning');
-    }
-  };
 
   const handleConnect = async (device: DiscoveredDevice) => {
     try {
@@ -253,169 +195,65 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Quick Actions */}
+          {/* Auto-Start Status - Always Active */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ fontSize: 12, fontWeight: '700', color: '#666', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Quick Actions
+              Network Status (Auto-Active)
             </Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              {!isAdvertising ? (
-                <Animated.View style={{ flex: 1, transform: [{ scale: alertPulse }] }}>
-                  <TouchableOpacity 
-                    activeOpacity={0.7}
-                    style={{ 
-                      backgroundColor: '#dc2626',
-                      borderRadius: 10,
-                      padding: 16,
-                      alignItems: 'center',
-                      borderWidth: 2,
-                      borderColor: '#ef4444',
-                    }}
-                    onPress={handleStartAdvertising}
-                  >
-                    <Text style={{ fontSize: 24, marginBottom: 4 }}>📡</Text>
-                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      Broadcast
+            {isAdvertising && (
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center',
+                backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                padding: 12,
+                borderRadius: 8,
+                marginBottom: 8,
+                borderLeftWidth: 3,
+                borderLeftColor: '#dc2626',
+              }}>
+                <ActivityIndicator size="small" color="#dc2626" />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>📡 Broadcasting Signal</Text>
+                  <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>Device discoverable and accepting connections</Text>
+                  {Platform.OS !== 'android' && (
+                    <Text style={{ fontSize: 10, color: '#f59e0b', fontWeight: '600', marginTop: 4 }}>
+                      ⚠️ iOS: Simulated mode
                     </Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              ) : (
-                <TouchableOpacity 
-                  activeOpacity={0.7}
-                  style={{ 
-                    flex: 1,
-                    backgroundColor: '#7f1d1d',
-                    borderRadius: 10,
-                    padding: 16,
-                    alignItems: 'center',
-                    borderWidth: 2,
-                    borderColor: '#991b1b',
-                  }}
-                  onPress={handleStopAdvertising}
-                >
-                  <Text style={{ fontSize: 24, marginBottom: 4 }}>⏹️</Text>
-                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Stop
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {!isScanning ? (
-                <TouchableOpacity 
-                  activeOpacity={0.7}
-                  style={{ 
-                    flex: 1,
-                    backgroundColor: '#ea580c',
-                    borderRadius: 10,
-                    padding: 16,
-                    alignItems: 'center',
-                    borderWidth: 2,
-                    borderColor: '#f97316',
-                  }}
-                  onPress={handleStartScanning}
-                >
-                  <Text style={{ fontSize: 24, marginBottom: 4 }}>🔍</Text>
-                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Scan
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  activeOpacity={0.7}
-                  style={{ 
-                    flex: 1,
-                    backgroundColor: '#7c2d12',
-                    borderRadius: 10,
-                    padding: 16,
-                    alignItems: 'center',
-                    borderWidth: 2,
-                    borderColor: '#9a3412',
-                  }}
-                  onPress={stopScanning}
-                >
-                  <Text style={{ fontSize: 24, marginBottom: 4 }}>⏹️</Text>
-                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Stop
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {/* Active Status Indicators */}
-          {(isAdvertising || isScanning) && (
-            <View style={{ marginBottom: 16 }}>
-              {isAdvertising && (
-                <View style={{ 
-                  flexDirection: 'row', 
-                  alignItems: 'center',
-                  backgroundColor: 'rgba(220, 38, 38, 0.1)',
-                  padding: 12,
-                  borderRadius: 8,
-                  marginBottom: 8,
-                  borderLeftWidth: 3,
-                  borderLeftColor: '#dc2626',
-                }}>
-                  <ActivityIndicator size="small" color="#dc2626" />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>Broadcasting Signal</Text>
-                    <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>{advertisementMessage}</Text>
-                    {Platform.OS !== 'android' && (
-                      <Text style={{ fontSize: 10, color: '#f59e0b', fontWeight: '600', marginTop: 4 }}>
-                        ⚠️ iOS: Simulated mode
-                      </Text>
-                    )}
-                  </View>
+                  )}
                 </View>
-              )}
-              {isScanning && (
-                <View style={{ 
-                  flexDirection: 'row', 
-                  alignItems: 'center',
-                  backgroundColor: 'rgba(234, 88, 12, 0.1)',
-                  padding: 12,
-                  borderRadius: 8,
-                  borderLeftWidth: 3,
-                  borderLeftColor: '#ea580c',
-                }}>
-                  <ActivityIndicator size="small" color="#ea580c" />
-                  <Text style={{ fontSize: 12, color: '#fff', marginLeft: 10, fontWeight: '700' }}>
-                    Scanning for devices...
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Broadcast Message Input */}
-          <View style={{ 
-            backgroundColor: '#1a1a1a', 
-            borderRadius: 10, 
-            padding: 16, 
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: '#2a2a2a',
-          }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#666', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Broadcast Message (Initial)
-            </Text>
-            <TextInput
-              style={{ 
-                borderWidth: 1, 
-                borderColor: '#333', 
-                borderRadius: 8, 
-                padding: 12, 
-                fontSize: 14, 
-                backgroundColor: '#0a0a0a', 
-                color: '#fff',
-                fontWeight: '500',
-              }}
-              value={broadcastInput}
-              onChangeText={setBroadcastInput}
-              placeholder="Emergency status or location..."
-              placeholderTextColor="#555"
-              maxLength={500}
-            />
+              </View>
+            )}
+            {isScanning && (
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center',
+                backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                padding: 12,
+                borderRadius: 8,
+                borderLeftWidth: 3,
+                borderLeftColor: '#ea580c',
+              }}>
+                <ActivityIndicator size="small" color="#ea580c" />
+                <Text style={{ fontSize: 12, color: '#fff', marginLeft: 10, fontWeight: '700' }}>
+                  🔍 Scanning for nearby devices...
+                </Text>
+              </View>
+            )}
+            {!isAdvertising && !isScanning && (
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center',
+                backgroundColor: 'rgba(100, 100, 100, 0.1)',
+                padding: 12,
+                borderRadius: 8,
+                borderLeftWidth: 3,
+                borderLeftColor: '#666',
+              }}>
+                <Text style={{ fontSize: 12, color: '#999', fontWeight: '700' }}>
+                  ⏳ Initializing network...
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Global Channel Chat */}
