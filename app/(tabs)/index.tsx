@@ -126,11 +126,7 @@ export default function HomeScreen() {
       {/* Advertising Section */}
       <ThemedView style={styles.section}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>Advertising</ThemedText>
-        <ThemedText style={styles.description}>
-          {Platform.OS === 'android' 
-            ? 'Advertise this device with GATT server. Devices will automatically connect when discovered.'
-            : '⚠️ iOS: Simulated mode only - this device will NOT be discoverable. Native GATT server requires Android.'}
-        </ThemedText>
+
         
         <TextInput
           style={styles.input}
@@ -140,9 +136,6 @@ export default function HomeScreen() {
           placeholderTextColor="#999"
           maxLength={500}
         />
-        <ThemedText style={styles.infoText}>
-          Note: Messages are sent via GATT characteristics (up to ~512 bytes per write). Initial message is stored in the characteristic.
-        </ThemedText>
 
         <ThemedView style={styles.buttonRow}>
           {!isAdvertising ? (
@@ -184,9 +177,6 @@ export default function HomeScreen() {
       {/* Scanning Section */}
       <ThemedView style={styles.section}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>Scanning</ThemedText>
-        <ThemedText style={styles.description}>
-          Scan for nearby BLE devices advertising the service UUID. Devices will automatically connect and exchange messages via GATT.
-        </ThemedText>
 
         <ThemedView style={styles.buttonRow}>
           {!isScanning ? (
