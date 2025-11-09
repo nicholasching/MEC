@@ -1,0 +1,25 @@
+{
+  "name": "ble-advertise",
+  "version": "1.0.0",
+  "description": "Native Android BLE advertising module for Expo",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "ble",
+    "bluetooth",
+    "advertising",
+    "android"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react-native": "*",
+    "expo": "*"
+  }
+}
+
+

@@ -1,0 +1,60 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+// Ensure repositories are available for dependency resolution
+repositories {
+    google()
+    mavenCentral()
+}
+
+android {
+    namespace 'com.blerelay'
+    
+    // Use rootProject.ext values if available (set by Expo/React Native)
+    // Expo/React Native typically sets these in the root build.gradle
+    // Fallback to default values if not available
+    def compileSdk = 36
+    def buildTools = '36.0.0'
+    def minSdk = 21
+    def targetSdk = 36
+    
+    // Safely try to get values from rootProject.ext (set by React Native/Expo)
+    if (rootProject.hasProperty('ext')) {
+        def ext = rootProject.ext
+        if (ext.hasProperty('compileSdkVersion')) compileSdk = ext.compileSdkVersion
+        if (ext.hasProperty('buildToolsVersion')) buildTools = ext.buildToolsVersion
+        if (ext.hasProperty('minSdkVersion')) minSdk = ext.minSdkVersion
+        if (ext.hasProperty('targetSdkVersion')) targetSdk = ext.targetSdkVersion
+    }
+    
+    compileSdkVersion compileSdk
+    buildToolsVersion buildTools
+
+    defaultConfig {
+        minSdkVersion minSdk
+        targetSdkVersion targetSdk
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'com.facebook.react:react-native:+'
+    // Kotlin stdlib is automatically provided by the Kotlin Android plugin
+    // No need to explicitly add it - the plugin will use the correct version
+}
+
