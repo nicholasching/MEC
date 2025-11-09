@@ -64,11 +64,11 @@ class BLEService {
   private processedMessageIds: Set<string> = new Set(); // Track processed messages to prevent duplicates
   private notificationListeners: Set<(title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void> = new Set();
   
-  constructor() {
-    this.manager = new BleManager();
-    // Auto-start advertising and scanning when Bluetooth is ready
-    this.setupAutoStart();
-  }
+  // constructor() {
+  //   this.manager = new BleManager();
+  //   // Auto-start advertising and scanning when Bluetooth is ready
+  //   this.setupAutoStart();
+  // }
 
   /**
    * Auto-start advertising and scanning when Bluetooth is ready
