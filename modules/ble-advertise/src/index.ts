@@ -143,6 +143,28 @@ class BleAdvertise {
       return 0;
     }
   }
+
+  /**
+   * Open Bluetooth settings (Android only)
+   */
+  async openBluetoothSettings(): Promise<string> {
+    if (!this.isAvailable()) {
+      throw new Error('BleAdvertiseModule is not available on this platform');
+    }
+
+    try {
+      if (!BleAdvertiseModule.openBluetoothSettings) {
+        throw new Error('openBluetoothSettings method not found on BleAdvertiseModule');
+      }
+      
+      const result = await BleAdvertiseModule.openBluetoothSettings();
+      return result as string;
+    } catch (error: any) {
+      console.error('Error calling openBluetoothSettings:', error);
+      const errorMessage = error?.message || error?.toString() || 'Failed to open Bluetooth settings';
+      throw new Error(errorMessage);
+    }
+  }
 }
 
 export default new BleAdvertise();
