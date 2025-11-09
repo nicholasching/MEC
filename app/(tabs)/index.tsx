@@ -131,6 +131,7 @@ export default function HomeScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
         <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
         <View style={{ paddingTop: statusBarHeight, flex: 1 }}>
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
@@ -341,6 +342,7 @@ export default function HomeScreen() {
           </View>
         </KeyboardAvoidingView>
         </View>
+        </SafeAreaView>
       </View>
     );
   }
