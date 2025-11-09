@@ -99,9 +99,45 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+      {/* Orange Gradient Semi-Circle */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 300, overflow: 'hidden', zIndex: 0 }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: -200,
+            left: '50%',
+            width: 400,
+            height: 400,
+            borderRadius: 200,
+            backgroundColor: '#ff9500',
+            opacity: 0.25,
+            transform: [{ translateX: -200 }],
+            shadowColor: '#ff9500',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.3,
+            shadowRadius: 80,
+            elevation: 20,
+          }}
+        />
+        {/* Inner gradient layer for fade effect */}
+        <View
+          style={{
+            position: 'absolute',
+            top: -180,
+            left: '50%',
+            width: 350,
+            height: 350,
+            borderRadius: 175,
+            backgroundColor: '#ff9000',
+            opacity: 0.2,
+            transform: [{ translateX: -175 }],
+          }}
+        />
+      </View>
+      <ScrollView style={{ flex: 1, zIndex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
       <View style={{ padding: 16, marginBottom: 8 }}>
-        <Text style={{ fontWeight: '500', marginBottom: 32, marginTop: 32, fontSize: 28, color: '#fff' }}>Local communication, always ready when you need it.</Text>
+        <Text style={{ fontSize: 16, fontWeight: '300', color: '#fff', margin: "auto" }}>Emergency Chat</Text>
+        <Text style={{ fontWeight: '500', marginBottom: 32, marginTop: 64, fontSize: 32, color: '#fff', textAlign: 'center' }}>Local communication, always ready when you need it.</Text>
         {/* <ThemedText style={styles.subtitle}>Device ID: {deviceId}</ThemedText>
         <ThemedText style={styles.infoText}>GATT-based communication</ThemedText>
         <ThemedText style={styles.infoText}>Service UUID: {serviceUuid}</ThemedText>
@@ -109,7 +145,7 @@ export default function HomeScreen() {
         <ThemedText style={styles.infoText}>Devices advertise service UUID, then connect via GATT for messaging</ThemedText> */}
         {/* <ThemedText style={styles.subtitle}>Users Connected:</ThemedText>
         <ThemedText style={styles.subtitle}>1000000</ThemedText> */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12}}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, marginTop: 32}}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
 
 
@@ -119,10 +155,19 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#111', padding: 16, borderRadius: 12, marginTop: 32}}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+
+
+            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 2}}>
+              <Text style={{ fontSize: 32, fontWeight: '400', color: '#ddd', padding: 16, margin: "auto"}}>Join</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* Advertising Section */}
-      <View style={{ padding: 16, marginBottom: 8 }}>
+      <View style={{ padding: 16, marginBottom: 8, marginTop: 1000 }}>
         <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, color: '#fff' }}>Advertising</Text>
 
         
