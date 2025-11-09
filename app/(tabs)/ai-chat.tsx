@@ -149,10 +149,6 @@ export default function AIChatScreen() {
             <ThemedText type="title" style={styles.headerTitle}>
               AI Chat
             </ThemedText>
-            <View style={styles.statusBadge}>
-              <View style={styles.statusDot} />
-              <ThemedText style={styles.statusText}>Ready</ThemedText>
-            </View>
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
@@ -163,20 +159,7 @@ export default function AIChatScreen() {
                 Change Model
               </ThemedText>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={clearHistory}
-              style={styles.clearButton}
-              disabled={messages.length === 0}
-            >
-              <ThemedText
-                style={[
-                  styles.clearButtonText,
-                  messages.length === 0 && styles.clearButtonTextDisabled,
-                ]}
-              >
-                Clear
-              </ThemedText>
-            </TouchableOpacity>
+
           </View>
         </ThemedView>
 
@@ -201,21 +184,44 @@ export default function AIChatScreen() {
                 Hi! I&apos;m your AI assistant
               </ThemedText>
               <ThemedText style={styles.emptySubtext}>
-                I run completely on your device using the Gemma 3n model.
-                Your conversations stay private and never leave your phone.
+                I run completely on your device.
               </ThemedText>
-              <ThemedView style={styles.examplePrompts}>
+              <View style={styles.examplePrompts}>
                 <ThemedText style={styles.exampleTitle}>Try asking:</ThemedText>
-                <ThemedText style={styles.examplePrompt}>
-                  • &quot;Explain quantum computing simply&quot;
-                </ThemedText>
-                <ThemedText style={styles.examplePrompt}>
-                  • &quot;Write a haiku about technology&quot;
-                </ThemedText>
-                <ThemedText style={styles.examplePrompt}>
-                  • &quot;What are the benefits of on-device AI?&quot;
-                </ThemedText>
-              </ThemedView>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={async () => {
+                    await sendMessage('How do I purify water safely?');
+                  }}
+                  style={styles.quickButton}
+                >
+                  <ThemedText style={styles.quickButtonText}>
+                    How do I purify water safely?
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={async () => {
+                    await sendMessage('What should I do if someone is injured?');
+                  }}
+                  style={styles.quickButton}
+                >
+                  <ThemedText style={styles.quickButtonText}>
+                    What should I do if someone is injured?
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={async () => {
+                    await sendMessage('How can I signal for help?');
+                  }}
+                  style={styles.quickButton}
+                >
+                  <ThemedText style={styles.quickButtonText}>
+                    How can I signal for help?
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
             </ThemedView>
           ) : (
             <>
@@ -463,23 +469,30 @@ const styles = StyleSheet.create({
   },
   examplePrompts: {
     marginTop: 20,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(128, 128, 128, 0.1)',
     alignSelf: 'stretch',
     maxWidth: 350,
+    gap: 8,
   },
   exampleTitle: {
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
     opacity: 0.8,
+    textAlign: 'center',
   },
-  examplePrompt: {
-    fontSize: 13,
-    opacity: 0.7,
-    lineHeight: 20,
-    marginBottom: 4,
+  quickButton: {
+    backgroundColor: '#991b1b',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#b91c1c',
+  },
+  quickButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
   },
   messageBubble: {
     padding: 12,

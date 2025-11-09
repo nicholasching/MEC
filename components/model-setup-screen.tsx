@@ -49,7 +49,7 @@ export function ModelSetupScreen({ onImport, onInitialize, onBack, modelInfo }: 
     <ThemedView style={styles.container}>
       {onBack && (
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <ThemedText style={styles.backButtonText}>← Back</ThemedText>
+          <ThemedText style={styles.backButtonText}>Back</ThemedText>
         </TouchableOpacity>
       )}
       

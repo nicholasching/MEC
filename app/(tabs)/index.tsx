@@ -1,9 +1,12 @@
 // Using native Text/View for a simplified UI
 import { DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  
   const {
     isAdvertising,
     isScanning,
@@ -120,7 +123,7 @@ export default function HomeScreen() {
   const getSignalColor = () => {
     const strength = getSignalStrength();
     if (strength === 'Off') return '#666';
-    if (strength === 'Weak') return '#dc2626';
+    if (strength === 'Weak') return '#991b1b';
     if (strength === 'Fair') return '#f59e0b';
     if (strength === 'Good') return '#10b981';
     return '#10b981';
@@ -175,14 +178,14 @@ export default function HomeScreen() {
                 marginRight: 14,
               }}
             >
-              <Text style={{ fontSize: 20, color: '#fff' }}>←</Text>
+              <Text style={{ fontSize: 20, color: '#fff', marginBottom: 6 }}>←</Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: '#fff', letterSpacing: 0.3 }}>
                 Global Channel
               </Text>
               <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                {connectedDeviceCount} connected · {globalMessages.length} messages
+                {connectedDeviceCount} connected · {globalMessages.length} messages total
               </Text>
             </View>
           </View>
@@ -254,7 +257,7 @@ export default function HomeScreen() {
                       },
                       isSent 
                         ? { 
-                            backgroundColor: '#dc2626', 
+                            backgroundColor: '#991b1b', 
                             borderBottomRightRadius: 4,
                           } 
                         : { 
@@ -298,7 +301,7 @@ export default function HomeScreen() {
                 borderRadius: 8,
                 marginBottom: 12,
                 borderLeftWidth: 3,
-                borderLeftColor: '#dc2626',
+                borderLeftColor: '#991b1b',
               }}>
                 <Text style={{ fontSize: 11, color: '#ff6b6b', fontWeight: '600' }}>⚠️ {error}</Text>
               </View>
@@ -374,20 +377,20 @@ export default function HomeScreen() {
           {/* Header */}
           <View style={{ 
             padding: 20,
-            paddingTop: 50,
+            paddingTop: Platform.OS === 'android' ? insets.top + 20 : 50,
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
               <View style={{ 
                 width: 8, 
                 height: 8, 
                 borderRadius: 4, 
-                backgroundColor: '#dc2626',
+                backgroundColor: '#991b1b',
                 marginRight: 8,
               }} />
               <Text style={{ 
                 fontSize: 11, 
                 fontWeight: '700', 
-                color: '#dc2626', 
+                color: '#991b1b', 
                 letterSpacing: 2,
                 textTransform: 'uppercase',
               }}>
@@ -411,7 +414,7 @@ export default function HomeScreen() {
               <View style={{ 
                 backgroundColor: 'rgba(220, 38, 38, 0.15)',
                 borderLeftWidth: 3,
-                borderLeftColor: '#dc2626',
+                borderLeftColor: '#991b1b',
                 padding: 14,
                 borderRadius: 12,
               }}>
@@ -420,18 +423,57 @@ export default function HomeScreen() {
             </View>
           )}
 
+                    {/* Stats Cards */}
+                    <View style={{ 
+            flexDirection: 'row', 
+            paddingHorizontal: 20,
+            marginBottom: 24,
+            gap: 12,
+          }}>
+            <View style={{ 
+              flex: 1,
+              backgroundColor: '#1a1a1a',
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: '#2a2a2a',
+            }}>
+              <Text style={{ fontSize: 10, color: '#10b981', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Connected
+              </Text>
+              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
+                {connectedDeviceCount}
+              </Text>
+            </View>
+            <View style={{ 
+              flex: 1,
+              backgroundColor: '#1a1a1a',
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: '#2a2a2a',
+            }}>
+              <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Messages
+              </Text>
+              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
+                {globalMessages.length}
+              </Text>
+            </View>
+          </View>
+
           {/* Big Chat Button */}
           <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => setShowChatPage(true)}
               style={{
-                backgroundColor: '#dc2626',
+                backgroundColor: '#991b1b',
                 borderRadius: 20,
                 padding: 28,
                 borderWidth: 2,
                 borderColor: '#ef4444',
-                shadowColor: '#dc2626',
+                shadowColor: '#991b1b',
                 shadowOffset: { width: 0, height: 8 },
                 shadowOpacity: 0.4,
                 shadowRadius: 16,
@@ -465,9 +507,15 @@ export default function HomeScreen() {
                   backgroundColor: 'rgba(255, 255, 255, 0.2)',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  marginLeft: 12,
                 }}>
-                  <Text style={{ fontSize: 24, color: '#fff', fontWeight: '700' }}>→</Text>
+                  <Text style={{ 
+                    fontSize: 20, 
+                    color: '#fff', 
+                    fontWeight: '700',
+                    textAlign: 'center',
+                  marginBottom: 6,
+
+                  }}>→</Text>
                 </View>
               </View>
               
@@ -624,62 +672,10 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Stats Cards */}
-          <View style={{ 
-            flexDirection: 'row', 
-            paddingHorizontal: 20,
-            marginBottom: 24,
-            gap: 12,
-          }}>
-            <View style={{ 
-              flex: 1,
-              backgroundColor: '#1a1a1a',
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#2a2a2a',
-            }}>
-              <Text style={{ fontSize: 10, color: '#10b981', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Connected
-              </Text>
-              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
-                {connectedDeviceCount}
-              </Text>
-            </View>
-            <View style={{ 
-              flex: 1,
-              backgroundColor: '#1a1a1a',
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#2a2a2a',
-            }}>
-              <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Messages
-              </Text>
-              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
-                {globalMessages.length}
-              </Text>
-            </View>
-            <View style={{ 
-              flex: 1,
-              backgroundColor: '#1a1a1a',
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#2a2a2a',
-            }}>
-              <Text style={{ fontSize: 11, color: getSignalColor(), fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Signal
-              </Text>
-              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
-                {getSignalStrength()}
-              </Text>
-            </View>
-          </View>
+
 
           {/* Network Status */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          {/* <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
             <View style={{
               backgroundColor: '#1a1a1a',
               borderRadius: 16,
@@ -712,7 +708,7 @@ export default function HomeScreen() {
                     alignItems: 'center',
                     marginRight: 12,
                   }}>
-                    <ActivityIndicator size="small" color="#dc2626" />
+                    <ActivityIndicator size="small" color="#991b1b" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700', marginBottom: 2 }}>
@@ -777,7 +773,7 @@ export default function HomeScreen() {
                 </View>
               )}
             </View>
-          </View>
+          </View> */}
 
           {/* Connected Devices */}
           {connectedDevices.length > 0 && (
