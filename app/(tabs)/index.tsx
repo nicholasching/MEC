@@ -1,7 +1,7 @@
 // Using native Text/View for a simplified UI
 import { DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   const {
@@ -38,12 +38,31 @@ export default function HomeScreen() {
     }
   }, [globalMessages, showChatPage]);
 
+  // Handle Android back button
+  useEffect(() => {
+    const backAction = () => {
+      if (showChatPage) {
+        Keyboard.dismiss();
+        setShowChatPage(false);
+        return true; // Prevent default behavior
+      }
+      return false; // Let default behavior happen
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [showChatPage]);
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   const handleConnect = async (device: DiscoveredDevice) => {
     try {
@@ -462,12 +481,14 @@ export default function HomeScreen() {
           </View>
 
           {/* Quick Emergency Buttons */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
             <Text style={{ 
               fontSize: 12, 
-              fontWeight: '700', 
+              fontWeight: '400', 
               color: '#999', 
-              marginBottom: 12,
+              marginTop: 8,
+              marginBottom: 16,
+              margin: "auto",
               textTransform: 'uppercase',
               letterSpacing: 1,
             }}>
