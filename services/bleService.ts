@@ -289,9 +289,24 @@ class BLEService {
       const connectedDevice = await device.connect();
       console.log(`✅ Connected to device: ${deviceId}`);
 
-      // Discover services and characteristics
+      // Discover services and characteristics first
       await connectedDevice.discoverAllServicesAndCharacteristics();
       console.log(`✅ Discovered services and characteristics for ${deviceId}`);
+
+      // Request larger MTU for longer messages (default is 23 bytes, request 517 bytes)
+      // Request MTU after service discovery for better compatibility
+      try {
+        const mtuResult = await connectedDevice.requestMTU(517);
+        console.log(`✅ MTU requested for ${deviceId}, result: ${mtuResult}`);
+        // Note: The actual MTU might be negotiated to a lower value (e.g., 185, 247, etc.)
+        // But even 185 bytes is much better than the default 20 bytes
+        // Wait a bit for MTU negotiation to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.warn(`⚠️ Failed to request MTU for ${deviceId}:`, error);
+        // Continue even if MTU request fails - will use default 20 bytes
+        // react-native-ble-plx will handle chunking for long messages
+      }
 
       // Find our service
       const services = await connectedDevice.services();
@@ -323,10 +338,25 @@ class BLEService {
       this.deviceCharacteristics.set(deviceId, targetCharacteristic);
 
       // Read initial message
+      // For long messages, we may need to read in chunks, but react-native-ble-plx handles this automatically
       try {
         const messageValue = await targetCharacteristic.read();
-        const message = Buffer.from(messageValue.value!, 'base64').toString('utf-8');
-        console.log(`✅ Read message from ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars)`);
+        // react-native-ble-plx returns base64-encoded value
+        // For longer messages, it should handle multiple reads automatically
+        let message: string;
+        if (messageValue.value) {
+          try {
+            // Try base64 decode first (react-native-ble-plx format)
+            const decoded = Buffer.from(messageValue.value, 'base64');
+            message = decoded.toString('utf-8');
+          } catch (e) {
+            // If base64 decode fails, try direct UTF-8
+            message = Buffer.from(messageValue.value, 'utf-8').toString('utf-8');
+          }
+        } else {
+          message = '';
+        }
+        console.log(`✅ Read message from ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars, ${messageValue.value?.length || 0} bytes)`);
 
         // Add to connected devices
         this.connectedDevices.set(deviceId, connectedDevice);
@@ -383,7 +413,17 @@ class BLEService {
 
         if (characteristic && characteristic.value) {
           try {
-            const message = Buffer.from(characteristic.value, 'base64').toString('utf-8');
+            // react-native-ble-plx returns base64-encoded value
+            // Decode it to get the actual message
+            let message = '';
+            try {
+              const decoded = Buffer.from(characteristic.value, 'base64');
+              message = decoded.toString('utf-8');
+            } catch (e) {
+              // If base64 decode fails, try treating as UTF-8 directly
+              console.warn(`Failed to decode base64 in notification, trying UTF-8: ${e}`);
+              message = characteristic.value;
+            }
             console.log(`📨 Message received from ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars)`);
 
             // Notify listeners
@@ -444,13 +484,16 @@ class BLEService {
         throw new Error(`Device ${deviceId} not connected or characteristic not found`);
       }
 
-      // Convert message to base64
+      // react-native-ble-plx expects base64-encoded string for write operations
+      // Convert message to UTF-8 bytes, then to base64
       const messageBytes = Buffer.from(message, 'utf-8');
       const base64Message = messageBytes.toString('base64');
-
+      
       // Write to characteristic
+      // react-native-ble-plx and Android BLE stack handle long writes automatically
+      // With larger MTU (517 bytes), we can send much longer messages (up to ~512 bytes payload)
       await characteristic.writeWithResponse(base64Message);
-      console.log(`✅ Message sent to ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars)`);
+      console.log(`✅ Message sent to ${deviceId}: ${message.substring(0, 50)}... (${message.length} chars, ${messageBytes.length} bytes)`);
     } catch (error: any) {
       console.error('Error sending message:', error);
       throw error;
