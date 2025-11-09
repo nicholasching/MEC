@@ -5,7 +5,7 @@ A disaster response communication app using **Bluetooth Low Energy (BLE)** mesh 
 ## � Installation
 
 ### Step 1: Download the App
-Download the latest APK from [GitHub](https://github.com/nicholasching/MEC) page.
+Download the latest APK from [Google Drive](https://drive.google.com/file/d/1PjPtcKWwy9MaAuHsu44lBqkadifdLprh/view?usp=sharing) page.
 
 ### Step 2: Download the Model Weights File for Local LLM
 Download the latest version of Gemma 3:1b.litertlm from [Hugging Face](https://huggingface.co/litert-community/Gemma3-1B-IT/tree/main) page.
