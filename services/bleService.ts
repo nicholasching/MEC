@@ -537,18 +537,19 @@ class BLEService {
         };
       }
 
-      // Create unique message ID (origin + timestamp + first 10 chars of message)
-      const messageId = `${routedMessage.origin}-${routedMessage.timestamp}-${routedMessage.message.substring(0, 10)}`;
+      // Create unique message ID using full message text to ensure uniqueness
+      // Include origin, timestamp, and FULL message text (not just first 10 chars)
+      const messageId = `${routedMessage.origin}-${routedMessage.timestamp}-${routedMessage.message}`;
       
       // Check if we've already processed this message
       if (this.processedMessageIds.has(messageId)) {
-        console.log(`⚠️ Ignoring duplicate message: ${messageId}`);
+        console.log(`⚠️ Ignoring duplicate message: ${messageId.substring(0, 80)}...`);
         return;
       }
 
       // Check if message originated from this device (prevent loops)
       if (routedMessage.origin === DEVICE_ID) {
-        console.log(`⚠️ Ignoring message from self: ${routedMessage.message.substring(0, 50)}...`);
+        console.log(`⚠️ Ignoring message from self (already shown in UI): ${routedMessage.message.substring(0, 50)}...`);
         return;
       }
 
@@ -809,6 +810,17 @@ class BLEService {
       // Serialize to JSON
       const messageJson = JSON.stringify(routedMessage);
 
+      // Create message ID and mark as processed BEFORE sending to prevent receiving our own message
+      const messageId = `${routedMessage.origin}-${routedMessage.timestamp}-${routedMessage.message}`;
+      this.processedMessageIds.add(messageId);
+      
+      // Clean up old message IDs (keep last 100)
+      if (this.processedMessageIds.size > 100) {
+        const idsArray = Array.from(this.processedMessageIds);
+        this.processedMessageIds.clear();
+        idsArray.slice(-100).forEach(id => this.processedMessageIds.add(id));
+      }
+
       // Broadcast to all connected devices
       const broadcastPromises: Promise<void>[] = [];
       this.connectedDevices.forEach((device, deviceId) => {
@@ -828,7 +840,8 @@ class BLEService {
       await Promise.allSettled(broadcastPromises);
       console.log(`✅ Broadcasted message to ${broadcastPromises.length} device(s): ${message.substring(0, 50)}...`);
       
-      // Notify local listeners (for UI update)
+      // Notify local listeners (for UI update) AFTER marking as processed
+      // This ensures if the message comes back through the mesh, it will be ignored
       this.messageListeners.forEach((listener) => {
         listener(message, DEVICE_ID, DEVICE_ID);
       });

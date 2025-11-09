@@ -216,16 +216,16 @@ export function useBLE() {
       };
 
       setGlobalMessages((prev) => {
-        // Check for duplicates (same origin, timestamp, and text)
+        // Check for duplicates using FULL message text (not just timestamp)
+        // Check if we already have this exact message from this origin
         const isDuplicate = prev.some(
           (msg) =>
             msg.originDeviceId === originDeviceId &&
-            msg.text === message &&
-            Math.abs(msg.timestamp - globalMessage.timestamp) < 1000 // Within 1 second
+            msg.text === message // Use full text comparison
         );
 
         if (isDuplicate) {
-          console.log('⚠️ Ignoring duplicate message in UI');
+          console.log('⚠️ Ignoring duplicate message in UI:', message.substring(0, 50) + '...');
           return prev;
         }
 
@@ -285,10 +285,7 @@ export function useBLE() {
       
       // Always broadcast to all connected devices via server
       if (isAdvertising) {
-        await bleService.sendMessageFromServer(message);
-        
-        // Message will be added via the message listener
-        // But we can add it immediately for better UX
+        // Add message to UI immediately for better UX (optimistic update)
         const globalMessage: GlobalMessage = {
           text: message,
           timestamp: Date.now(),
@@ -296,7 +293,23 @@ export function useBLE() {
           senderDeviceId: DEVICE_ID,
           sent: true,
         };
-        setGlobalMessages((prev) => [...prev, globalMessage]);
+        
+        // Check if this exact message already exists (shouldn't happen, but just in case)
+        setGlobalMessages((prev) => {
+          const exists = prev.some(
+            (msg) => msg.originDeviceId === DEVICE_ID && msg.text === message
+          );
+          if (exists) {
+            console.log('⚠️ Message already in UI, not adding duplicate');
+            return prev;
+          }
+          return [...prev, globalMessage];
+        });
+        
+        // Send to all connected devices
+        // The bleService will mark this message as processed so when it comes back
+        // through the mesh network, it will be ignored
+        await bleService.sendMessageFromServer(message);
       } else {
         throw new Error('Not advertising. Start advertising first to send messages.');
       }
