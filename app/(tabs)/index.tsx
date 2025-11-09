@@ -117,12 +117,6 @@ export default function HomeScreen() {
         <ThemedText style={styles.subtitle}>1000000</ThemedText> */}
       </ThemedView>
 
-      {error && (
-        <ThemedView style={styles.errorSection}>
-          <ThemedText style={styles.errorText}>Error: {error}</ThemedText>
-        </ThemedView>
-      )}
-
       {/* Advertising Section */}
       <ThemedView style={styles.section}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>Advertising</ThemedText>
