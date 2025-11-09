@@ -35,10 +35,10 @@ export default function AIChatScreen() {
     sendMessage,
     clearHistory,
     importModelFile,
-    changeModel,
   } = useGemma();
 
   const [inputText, setInputText] = useState('');
+  const [showImportScreen, setShowImportScreen] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Auto-scroll to bottom when messages update
@@ -64,12 +64,19 @@ export default function AIChatScreen() {
     await sendMessage(message);
   };
 
-  // Show setup screen if model doesn't exist
-  if (!modelExists) {
+  // Show setup screen if model doesn't exist or user wants to change model
+  if (!modelExists || showImportScreen) {
     return (
       <ModelSetupScreen
-        onImport={importModelFile}
+        onImport={async () => {
+          const result = await importModelFile();
+          if (result.success) {
+            setShowImportScreen(false);
+          }
+          return result;
+        }}
         onInitialize={initializeModel}
+        onBack={showImportScreen ? () => setShowImportScreen(false) : undefined}
         modelInfo={modelInfo}
       />
     );
@@ -149,7 +156,7 @@ export default function AIChatScreen() {
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
-              onPress={changeModel}
+              onPress={() => setShowImportScreen(true)}
               style={styles.changeModelButton}
             >
               <ThemedText style={styles.changeModelButtonText}>
@@ -487,7 +494,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
-    backgroundColor: '#E5E5EA',
+    backgroundColor: '#3A3A3C',
     alignSelf: 'flex-start',
     marginRight: '20%',
     borderBottomLeftRadius: 4,
@@ -495,7 +502,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 22,
-    color: '#000',
+    color: '#FFFFFF',
   },
   userMessageText: {
     color: '#FFFFFF',
@@ -522,14 +529,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     maxHeight: 100,
     backgroundColor: Platform.select({
+      ios: '#3A3A3C',
+      android: '#3A3A3C',
+      default: '#3A3A3C',
+    }),
+    color: Platform.select({
       ios: '#FFFFFF',
       android: '#FFFFFF',
       default: '#FFFFFF',
-    }),
-    color: Platform.select({
-      ios: '#000000',
-      android: '#000000',
-      default: '#000000',
     }),
   },
   sendButton: {

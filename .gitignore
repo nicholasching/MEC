@@ -42,4 +42,6 @@ app-example
 /ios
 /android
 
-services/bleService.ts
+android/build
+
+modules/ble-advertise/android/build/
