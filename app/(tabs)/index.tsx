@@ -109,7 +109,7 @@ export default function HomeScreen() {
   // Chat Page Component
   if (showChatPage) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -150,12 +150,6 @@ export default function HomeScreen() {
                 {connectedDeviceCount} connected · {globalMessages.length} messages
               </Text>
             </View>
-            <View style={{
-              width: 10,
-              height: 10,
-              borderRadius: 5,
-              backgroundColor: isAdvertising ? '#10b981' : '#666',
-            }} />
           </View>
 
           {/* Messages */}
@@ -343,7 +337,7 @@ export default function HomeScreen() {
           {/* Header */}
           <View style={{ 
             padding: 20,
-            paddingTop: 30,
+            paddingTop: 50,
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
               <View style={{ 
