@@ -107,12 +107,14 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <ThemedView style={styles.section}>
-        <ThemedText type="title" style={styles.title}>BLE Relay</ThemedText>
-        <ThemedText style={styles.subtitle}>Device ID: {deviceId}</ThemedText>
+        <ThemedText type="title" style={styles.title}>Local communication, always ready when you need it.</ThemedText>
+        {/* <ThemedText style={styles.subtitle}>Device ID: {deviceId}</ThemedText>
         <ThemedText style={styles.infoText}>GATT-based communication</ThemedText>
         <ThemedText style={styles.infoText}>Service UUID: {serviceUuid}</ThemedText>
         <ThemedText style={styles.infoText}>Characteristic UUID: {characteristicUuid}</ThemedText>
-        <ThemedText style={styles.infoText}>Devices advertise service UUID, then connect via GATT for messaging</ThemedText>
+        <ThemedText style={styles.infoText}>Devices advertise service UUID, then connect via GATT for messaging</ThemedText> */}
+        {/* <ThemedText style={styles.subtitle}>Users Connected:</ThemedText>
+        <ThemedText style={styles.subtitle}>1000000</ThemedText> */}
       </ThemedView>
 
       {error && (
@@ -292,7 +294,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    marginBottom: 4,
+    fontWeight: '500',
+    marginBottom: 64,
+    marginTop: 32,
   },
   subtitle: {
     fontSize: 14,
