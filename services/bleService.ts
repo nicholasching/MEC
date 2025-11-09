@@ -63,41 +63,135 @@ class BLEService {
   private connectedDeviceCount: number = 0; // Connected device counter
   private processedMessageIds: Set<string> = new Set(); // Track processed messages to prevent duplicates
   private notificationListeners: Set<(title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void> = new Set();
+  private debugMode: boolean = __DEV__; // Enable debug notifications in development mode by default
+  private lastBluetoothState: State | null = null; // Track last Bluetooth state to avoid duplicate handling
+  private isInitialStart: boolean = true; // Track if this is the initial app start
   
-  // constructor() {
-  //   this.manager = new BleManager();
-  //   // Auto-start advertising and scanning when Bluetooth is ready
-  //   this.setupAutoStart();
-  // }
+  constructor() {
+    this.manager = new BleManager();
+    // Auto-start advertising and scanning when Bluetooth is ready
+    if (Platform.OS === 'android') {
+      this.setupAutoStart();
+    }
+  }
+
+
+  /**
+   * Handle Bluetooth state changes
+   */
+  private async handleBluetoothStateChange(state: State): Promise<void> {
+    console.log('BLE State:', state);
+    
+    // Skip if state hasn't changed (avoid duplicate handling)
+    if (this.lastBluetoothState === state) {
+      return;
+    }
+    this.lastBluetoothState = state;
+    
+    // Mark that initial start is complete when Bluetooth turns on
+    if (state === State.PoweredOn) {
+      this.isInitialStart = false;
+    }
+    
+    if (state === State.PoweredOn) {
+      console.log('Bluetooth is powered on - auto-starting...');
+      
+      // Notify user that Bluetooth is enabled
+      this.postNotification(
+        'Bluetooth Enabled',
+        'Bluetooth is now enabled. Starting network services...',
+        'success',
+        true // Always show in production
+      );
+      
+      try {
+        // Wait a bit for permissions to be ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Start advertising
+        await this.startAdvertising(ADVERTISEMENT_MESSAGE);
+        
+        // Start scanning and auto-connecting
+        await this.startScanning((device, deviceId, message) => {
+          // Device connected callback
+          console.log(`Auto-connected to device: ${deviceId}`);
+        });
+      } catch (error) {
+        console.error('Error auto-starting BLE:', error);
+        // Don't throw - auto-start failures should be non-blocking
+      }
+    } else if (state === State.PoweredOff) {
+      console.log('Bluetooth is powered off');
+      
+      // Stop scanning and advertising when Bluetooth is off
+      if (this.isScanning) {
+        this.stopScanning();
+      }
+      if (this.isAdvertising) {
+        try {
+          await this.stopAdvertising();
+        } catch (error) {
+          console.error('Error stopping advertising:', error);
+        }
+      }
+      
+      // Notify user that Bluetooth is required
+      // User will need to manually enable Bluetooth in device settings
+      if (this.isInitialStart) {
+        // On initial start, show a more detailed notification
+        this.postNotification(
+          'Bluetooth Required',
+          'Bluetooth is turned off. Please enable Bluetooth in your device settings to use this app.',
+          'warning',
+          true // Always show in production
+        );
+      } else {
+        // During runtime, show a shorter notification
+        this.postNotification(
+          'Bluetooth Disabled',
+          'Bluetooth was turned off. Please enable Bluetooth to continue.',
+          'warning',
+          true // Always show in production
+        );
+      }
+    } else if (state === State.Unauthorized) {
+      console.log('Bluetooth unauthorized');
+      this.postNotification(
+        'Bluetooth Permission Required',
+        'Please grant Bluetooth permissions to use this app.',
+        'warning',
+        true // Always show in production
+      );
+    } else if (state === State.Unsupported) {
+      console.log('Bluetooth not supported');
+      this.postNotification(
+        'Bluetooth Not Supported',
+        'This device does not support Bluetooth Low Energy.',
+        'error',
+        true // Always show in production
+      );
+    } else if (state === State.Resetting) {
+      console.log('Bluetooth is resetting');
+      // Bluetooth is resetting - this is usually temporary
+      // Don't do anything, just wait for it to finish
+    }
+  }
 
   /**
    * Auto-start advertising and scanning when Bluetooth is ready
    */
   private setupAutoStart() {
-    // Start listening once bluetooth is available
+    // Check initial state first
+    this.manager.state().then((initialState: State) => {
+      console.log('Initial BLE State:', initialState);
+      this.handleBluetoothStateChange(initialState);
+    }).catch((error) => {
+      console.error('Error getting initial BLE state:', error);
+    });
+    
+    // Start listening for state changes
     this.stateSubscription = this.manager.onStateChange(async (state: State) => {
-      console.log('BLE State:', state);
-      if (state === State.PoweredOn) {
-        console.log('Bluetooth is powered on - auto-starting...');
-        try {
-          // Wait a bit for permissions to be ready
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Start advertising
-          await this.startAdvertising(ADVERTISEMENT_MESSAGE);
-          
-          // Start scanning and auto-connecting
-          await this.startScanning((device, deviceId, message) => {
-            // Device connected callback
-            console.log(`Auto-connected to device: ${deviceId}`);
-          });
-        } catch (error) {
-          console.error('Error auto-starting BLE:', error);
-          // Don't throw - auto-start failures should be non-blocking
-        }
-      } else if (state === State.PoweredOff) {
-        console.log('Bluetooth is powered off');
-      }
+      await this.handleBluetoothStateChange(state);
     }, true);
   }
 
@@ -248,7 +342,41 @@ class BLEService {
         },
         async (error, device) => {
           if (error) {
-            console.error('Scan error:', error);
+            // Handle Bluetooth powered off error first (don't log as error since we handle it gracefully)
+            const errorMessage = error?.message || '';
+            const errorCode = (error as any)?.errorCode || '';
+            const errorString = errorMessage.toLowerCase();
+            
+            // Check if this is a "powered off" error - handle gracefully without logging as error
+            if (errorString.includes('powered off') || 
+                errorString.includes('poweredoff') ||
+                errorString.includes('bluetoothle is powered off') ||
+                errorCode === 'BluetoothLE is powered off' ||
+                errorCode === 'PoweredOff' ||
+                errorCode === 'BluetoothDisabled') {
+              // This is expected when Bluetooth is turned off - handle gracefully
+              // Don't log as error since this is a normal state change
+              // The state change handler will notify the user, so we just stop scanning
+              
+              // Stop scanning gracefully (silently, no error logging)
+              if (this.scanSubscription) {
+                try {
+                  this.manager.stopDeviceScan();
+                } catch (stopError) {
+                  // Silently ignore errors when stopping scan (Bluetooth is already off)
+                }
+                this.scanSubscription = null;
+                this.isScanning = false;
+              }
+              
+              // Don't notify here - the state change handler will handle notifications
+              // This prevents duplicate notifications and ensures consistent messaging
+              
+              return; // Error handled gracefully, don't propagate or log as error
+            }
+            
+            // For other errors, log as error and continue
+            console.error('Scan error (non-Bluetooth state):', error);
             return;
           }
 
@@ -469,8 +597,22 @@ class BLEService {
     } catch (error: any) {
       console.error(`Error connecting to device ${deviceId}:`, error);
       this.postNotification('Connection Failed', `Failed to connect to device: ${error?.message || 'Unknown error'}`, 'error');
+      
+      // Only update count if device was actually added to connectedDevices
+      const wasConnected = this.connectedDevices.has(deviceId);
       this.connectedDevices.delete(deviceId);
       this.deviceCharacteristics.delete(deviceId);
+      
+      // Update count and notify listeners if device was connected
+      if (wasConnected) {
+        this.connectedDeviceCount = this.connectedDevices.size;
+        this.connectionListeners.forEach((listener) => {
+          listener(deviceId, false);
+        });
+        this.connectedDeviceCountListeners.forEach((listener) => {
+          listener(this.connectedDeviceCount);
+        });
+      }
     }
   }
 
@@ -707,10 +849,30 @@ class BLEService {
       this.reconnectCallbacks.delete(deviceId);
       this.reconnectAttempts.delete(deviceId);
       this.manualDisconnects.delete(deviceId);
+      
+      // Update connected device count
+      this.connectedDeviceCount = this.connectedDevices.size;
+      
+      // Notify listeners
+      this.connectionListeners.forEach((listener) => {
+        listener(deviceId, false);
+      });
+      this.connectedDeviceCountListeners.forEach((listener) => {
+        listener(this.connectedDeviceCount);
+      });
+      
       console.log(`Disconnected from device: ${deviceId}`);
     } catch (error) {
       console.error(`Error disconnecting from device ${deviceId}:`, error);
       this.manualDisconnects.delete(deviceId);
+      
+      // Even if there was an error, update count if device was removed
+      if (!this.connectedDevices.has(deviceId)) {
+        this.connectedDeviceCount = this.connectedDevices.size;
+        this.connectedDeviceCountListeners.forEach((listener) => {
+          listener(this.connectedDeviceCount);
+        });
+      }
     }
   }
 
@@ -718,8 +880,21 @@ class BLEService {
    * Stop scanning
    */
   stopScanning(): void {
-    if (this.scanSubscription) {
-      this.manager.stopDeviceScan();
+    if (this.scanSubscription || this.isScanning) {
+      try {
+        // Stop device scan - wrap in try-catch to handle cases where Bluetooth is off
+        this.manager.stopDeviceScan();
+      } catch (error: any) {
+        // Silently ignore errors when stopping scan (e.g., Bluetooth is already off)
+        // This is expected behavior and not an actual error
+        const errorMessage = error?.message || '';
+        if (!errorMessage.toLowerCase().includes('powered off') && 
+            !errorMessage.toLowerCase().includes('bluetooth')) {
+          // Only log if it's not a Bluetooth state error
+          console.warn('Error stopping scan (non-critical):', error);
+        }
+      }
+      
       this.scanSubscription = null;
       this.isScanning = false;
       
@@ -886,16 +1061,39 @@ class BLEService {
   }
 
   /**
+   * Set debug mode for notifications
+   * @param enabled - Whether to enable debug notifications (default: false, or __DEV__ in development)
+   */
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+    console.log(`🔧 Debug mode ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Get current debug mode status
+   * @returns Whether debug mode is enabled
+   */
+  getDebugMode(): boolean {
+    return this.debugMode;
+  }
+
+  /**
    * Post a notification to all subscribed clients
    * @param title - Notification title
    * @param message - Notification message
    * @param type - Notification type (info, success, warning, error)
+   * @param forceShow - If true, always show notification regardless of debug mode (default: false)
    */
-  postNotification(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
+  postNotification(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', forceShow: boolean = false): void {
+    // Always log to console for debugging
     console.log(`📢 Notification [${type}]: ${title} - ${message}`);
-    this.notificationListeners.forEach((listener) => {
-      listener(title, message, type);
-    });
+    
+    // Notify listeners if debug mode is enabled OR if forceShow is true
+    if (this.debugMode || forceShow) {
+      this.notificationListeners.forEach((listener) => {
+        listener(title, message, type);
+      });
+    }
   }
 
   /**
@@ -983,10 +1181,17 @@ class BLEService {
     });
     this.connectedDevices.clear();
     this.deviceCharacteristics.clear();
+    
+    // Update count to 0
+    this.connectedDeviceCount = 0;
+    this.connectedDeviceCountListeners.forEach((listener) => {
+      listener(0);
+    });
 
     // Clear listeners
     this.messageListeners.clear();
     this.connectionListeners.clear();
+    this.connectedDeviceCountListeners.clear();
     this.notificationListeners.clear();
 
     if (this.stateSubscription) {

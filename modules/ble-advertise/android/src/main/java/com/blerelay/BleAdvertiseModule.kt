@@ -7,7 +7,9 @@ import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
+import android.content.Intent
 import android.os.ParcelUuid
+import android.provider.Settings
 import android.util.Log
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -318,6 +320,19 @@ class BleAdvertiseModule(reactContext: ReactApplicationContext) : ReactContextBa
         } catch (e: Exception) {
             Log.e(TAG, "Error getting connected devices count", e)
             promise.resolve(0)
+        }
+    }
+
+    @ReactMethod
+    fun openBluetoothSettings(promise: Promise) {
+        try {
+            val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            reactApplicationContext.startActivity(intent)
+            promise.resolve("Bluetooth settings opened")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error opening Bluetooth settings: ${e.message}")
+            promise.reject("ERROR", "Failed to open Bluetooth settings: ${e.message}")
         }
     }
 
