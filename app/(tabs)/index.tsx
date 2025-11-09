@@ -1,8 +1,8 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ConnectedDevice, DiscoveredDevice, useBLE } from '@/hooks/useBLE';
+import { DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   const {
@@ -10,80 +10,25 @@ export default function HomeScreen() {
     isScanning,
     discoveredDevices,
     connectedDevices,
+    globalMessages,
+    connectedDeviceCount,
     advertisementMessage,
     error,
     deviceId,
     serviceUuid,
     characteristicUuid,
-    startAdvertising,
-    stopAdvertising,
-    startScanning,
-    stopScanning,
     connectToDevice,
     disconnectDevice,
     sendMessage,
-    setAdvertisementMessage,
   } = useBLE();
 
-  const [messageInput, setMessageInput] = useState(advertisementMessage);
+  const [messageInput, setMessageInput] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  const handleStartAdvertising = async () => {
-    try {
-      console.log('🔄 handleStartAdvertising called');
-      console.log('🔄 Message:', messageInput || advertisementMessage);
-      
-      // Permissions will be requested automatically by the service
-      // The permission dialog will show if permissions are not granted
-      await startAdvertising(messageInput || advertisementMessage);
-      
-      console.log('🔄 startAdvertising completed successfully');
-      
-      if (Platform.OS === 'android') {
-        Alert.alert('Success', 'Started BLE advertising! Your device is now discoverable.');
-      } else {
-        Alert.alert('Success', 'Started advertising (simulated mode on iOS)');
-      }
-    } catch (err: any) {
-      console.error('❌ Error in handleStartAdvertising:', err);
-      console.error('❌ Error message:', err?.message);
-      console.error('❌ Error code:', err?.code);
-      console.error('❌ Full error:', err);
-      
-      const errorMessage = err?.message || err?.toString() || 'Failed to start advertising';
-      
-      // Don't show duplicate alerts - permission function already shows alerts
-      if (errorMessage.includes('permission') || err?.code === 'PERMISSION_DENIED') {
-        // Permission alert is already shown by requestBluetoothPermissions
-        // Just log it here
-        console.log('Permission error handled by permission request function');
-      } else if (errorMessage.includes('too large')) {
-        Alert.alert(
-          'Message Too Long',
-          'Message is too large. Maximum message size is approximately 512 bytes per GATT write.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Error', errorMessage);
-      }
-    }
-  };
-
-  const handleStopAdvertising = async () => {
-    try {
-      await stopAdvertising();
-      Alert.alert('Success', 'Stopped advertising');
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to stop advertising');
-    }
-  };
-
-  const handleStartScanning = async () => {
-    try {
-      await startScanning();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to start scanning');
-    }
-  };
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [globalMessages]);
 
   const handleConnect = async (device: DiscoveredDevice) => {
     try {
@@ -103,15 +48,32 @@ export default function HomeScreen() {
     }
   };
 
+  const handleSendMessage = async () => {
+    if (messageInput.trim()) {
+      try {
+        await sendMessage(messageInput.trim());
+        setMessageInput('');
+        // Scroll to bottom after sending
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      } catch (error) {
+        console.error('Error sending message:', error);
+        // Don't clear input on error so user can retry
+      }
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <ThemedView style={styles.section}>
-        <ThemedText type="title" style={styles.title}>BLE Relay</ThemedText>
+        <ThemedText type="title" style={styles.title}>BLE Relay - Global Channel</ThemedText>
         <ThemedText style={styles.subtitle}>Device ID: {deviceId}</ThemedText>
-        <ThemedText style={styles.infoText}>GATT-based communication</ThemedText>
+        <ThemedText style={styles.infoText}>Connected Devices: {connectedDeviceCount}</ThemedText>
+        <ThemedText style={styles.infoText}>GATT-based global messaging channel</ThemedText>
         <ThemedText style={styles.infoText}>Service UUID: {serviceUuid}</ThemedText>
         <ThemedText style={styles.infoText}>Characteristic UUID: {characteristicUuid}</ThemedText>
-        <ThemedText style={styles.infoText}>Devices advertise service UUID, then connect via GATT for messaging</ThemedText>
+        <ThemedText style={styles.infoText}>Messages broadcast to all connected devices (max 5 hops)</ThemedText>
       </ThemedView>
 
       {error && (
@@ -120,127 +82,109 @@ export default function HomeScreen() {
         </ThemedView>
       )}
 
-      {/* Advertising Section */}
+      {/* Status Section */}
       <ThemedView style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>Advertising</ThemedText>
-        <ThemedText style={styles.description}>
-          {Platform.OS === 'android' 
-            ? 'Advertise this device with GATT server. Devices will automatically connect when discovered.'
-            : '⚠️ iOS: Simulated mode only - this device will NOT be discoverable. Native GATT server requires Android.'}
-        </ThemedText>
-        
-        <TextInput
-          style={styles.input}
-          value={messageInput}
-          onChangeText={setMessageInput}
-          placeholder="Initial message (stored in GATT characteristic)"
-          placeholderTextColor="#999"
-          maxLength={500}
-        />
-        <ThemedText style={styles.infoText}>
-          Note: Messages are sent via GATT characteristics (up to ~512 bytes per write). Initial message is stored in the characteristic.
-        </ThemedText>
-
-        <ThemedView style={styles.buttonRow}>
-          {!isAdvertising ? (
-            <TouchableOpacity 
-              style={[styles.button, styles.buttonPrimary]}
-              onPress={handleStartAdvertising}
-            >
-              <ThemedText style={styles.buttonText}>
-                Start Advertising
-              </ThemedText>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={[styles.button, styles.buttonDanger]}
-              onPress={handleStopAdvertising}
-            >
-              <ThemedText style={styles.buttonText}>
-                Stop Advertising
-              </ThemedText>
-            </TouchableOpacity>
-          )}
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Status</ThemedText>
+        <ThemedView style={styles.statusContainer}>
+          <ThemedText style={styles.statusText}>
+            {isAdvertising ? '🟢 Advertising' : '🔴 Not Advertising'}
+          </ThemedText>
+          <ThemedText style={styles.statusText}>
+            {isScanning ? '🟢 Scanning' : '🔴 Not Scanning'}
+          </ThemedText>
+          <ThemedText style={styles.statusText}>
+            Connected: {connectedDeviceCount} device(s)
+          </ThemedText>
         </ThemedView>
-
-        {isAdvertising && (
-          <ThemedView style={styles.statusContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <ThemedView style={styles.statusTextContainer}>
-              <ThemedText style={styles.statusText}>Advertising: {advertisementMessage}</ThemedText>
-              {Platform.OS !== 'android' && (
-                <ThemedText style={styles.warningText}>
-                  ⚠️ Simulated mode - device not discoverable
-                </ThemedText>
-              )}
-            </ThemedView>
-          </ThemedView>
+        {Platform.OS !== 'android' && isAdvertising && (
+          <ThemedText style={styles.warningText}>
+            ⚠️ Simulated mode - device not discoverable on iOS
+          </ThemedText>
         )}
       </ThemedView>
 
-      {/* Scanning Section */}
+      {/* Global Channel Messages Section */}
       <ThemedView style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>Scanning</ThemedText>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>
+          Global Channel ({globalMessages.length} messages)
+        </ThemedText>
         <ThemedText style={styles.description}>
-          Scan for nearby BLE devices advertising the service UUID. Devices will automatically connect and exchange messages via GATT.
+          All messages are broadcast to all connected devices. Messages from other devices are automatically relayed (max 5 hops).
         </ThemedText>
 
-        <ThemedView style={styles.buttonRow}>
-          {!isScanning ? (
-            <TouchableOpacity 
-              style={[styles.button, styles.buttonPrimary]}
-              onPress={handleStartScanning}
-            >
-              <ThemedText style={styles.buttonText}>
-                Start Scanning
-              </ThemedText>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={[styles.button, styles.buttonDanger]}
-              onPress={stopScanning}
-            >
-              <ThemedText style={styles.buttonText}>
-                Stop Scanning
-              </ThemedText>
-            </TouchableOpacity>
-          )}
-        </ThemedView>
+        <ThemedView style={styles.chatContainer}>
+          <ScrollView 
+            style={styles.chatMessages}
+            ref={scrollViewRef}
+            onContentSizeChange={() => {
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+            }}
+            nestedScrollEnabled
+          >
+            {globalMessages.length === 0 ? (
+              <ThemedView style={styles.emptyMessagesContainer}>
+                <ThemedText style={styles.infoText}>No messages yet. Send a message to start!</ThemedText>
+              </ThemedView>
+            ) : (
+              globalMessages.map((msg, index) => {
+                const isSent = msg.sent;
+                const isFromOtherDevice = msg.originDeviceId !== deviceId;
+                return (
+                  <View
+                    key={`${msg.timestamp}-${index}`}
+                    style={[
+                      styles.message,
+                      isSent ? styles.messageSent : styles.messageReceived,
+                    ]}
+                  >
+                    {!isSent && (
+                      <ThemedText style={styles.messageOrigin}>
+                        From: {msg.originDeviceId.substring(0, 8)}...
+                      </ThemedText>
+                    )}
+                    <ThemedText
+                      style={[
+                        styles.messageText,
+                        isSent && styles.messageTextSent,
+                      ]}
+                    >
+                      {msg.text}
+                    </ThemedText>
+                    <ThemedText style={[styles.messageTime, isSent && styles.messageTimeSent]}>
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </ThemedText>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
 
-        {isScanning && (
-          <ThemedView style={styles.statusContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <ThemedText style={styles.statusText}>Scanning for devices...</ThemedText>
-          </ThemedView>
-        )}
+          <View style={styles.chatInputContainer}>
+            <TextInput
+              style={styles.chatInput}
+              value={messageInput}
+              onChangeText={setMessageInput}
+              placeholder="Type a message to broadcast..."
+              placeholderTextColor="#999"
+              onSubmitEditing={handleSendMessage}
+              multiline
+              returnKeyType="send"
+              blurOnSubmit={false}
+              maxLength={500}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, !messageInput.trim() && styles.sendButtonDisabled]}
+              onPress={handleSendMessage}
+              disabled={!messageInput.trim()}
+            >
+              <ThemedText style={[styles.buttonText, { fontSize: 14 }]}>Send</ThemedText>
+            </TouchableOpacity>
+          </View>
+        </ThemedView>
       </ThemedView>
 
-      {/* Discovered Devices Section */}
-      {discoveredDevices.length > 0 && (
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Discovered Devices ({discoveredDevices.length})
-          </ThemedText>
-          <ThemedText style={styles.infoText}>
-            Note: Devices are automatically connected when discovered. These are devices that were discovered but not yet fully connected.
-          </ThemedText>
-          {discoveredDevices.map((device, index) => (
-            <ThemedView key={device.device.id} style={styles.deviceCard}>
-              <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
-              <ThemedText style={styles.deviceId}>ID: {device.deviceId}</ThemedText>
-              <ThemedText style={styles.deviceMessage}>Initial Message: {device.message || 'No message'}</ThemedText>
-              <TouchableOpacity 
-                style={[styles.button, styles.buttonSuccess, styles.deviceButton]}
-                onPress={() => handleConnect(device)}
-              >
-                <ThemedText style={styles.buttonText}>
-                  Connect (Auto-connect enabled)
-                </ThemedText>
-              </TouchableOpacity>
-            </ThemedView>
-          ))}
-        </ThemedView>
-      )}
 
       {/* Connected Devices Section */}
       {connectedDevices.length > 0 && (
@@ -249,12 +193,16 @@ export default function HomeScreen() {
             Connected Devices ({connectedDevices.length})
           </ThemedText>
           {connectedDevices.map((device, index) => (
-            <DeviceChat
-              key={device.deviceId || device.device.id || `device-${index}`}
-              device={device}
-              onSendMessage={(message) => sendMessage(device.deviceId || device.device.id, message)}
-              onDisconnect={() => handleDisconnect(device.deviceId, device.name)}
-            />
+            <ThemedView key={device.deviceId || device.device.id || `device-${index}`} style={styles.deviceCard}>
+              <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
+              <ThemedText style={styles.deviceId}>ID: {device.deviceId}</ThemedText>
+              <TouchableOpacity 
+                style={[styles.button, styles.buttonDanger, styles.deviceButton]}
+                onPress={() => handleDisconnect(device.deviceId, device.name)}
+              >
+                <ThemedText style={styles.buttonText}>Disconnect</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
           ))}
         </ThemedView>
       )}
@@ -263,10 +211,14 @@ export default function HomeScreen() {
       <ThemedView style={styles.section}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>Information</ThemedText>
         <ThemedText style={styles.infoText}>
+          • Advertising and scanning start automatically when the app launches{'\n'}
+          • Advertising and scanning will automatically restart if they stop{'\n'}
+          • Messages are broadcast to all connected devices{'\n'}
+          • Messages are automatically relayed (max 5 hops) to reach all devices{'\n'}
+          • Messages from your device are not re-broadcast (prevents loops){'\n'}
+          • "I have connected." message is sent when a device connects{'\n'}
           • Make sure Bluetooth is enabled on your device{'\n'}
           • Grant Bluetooth and location permissions (required for BLE on Android){'\n'}
-          • Devices advertise with service UUID and accept automatic connections{'\n'}
-          • Messages are exchanged via GATT characteristics{'\n'}
           • Devices will be discovered when advertising and within range (~10 meters)
         </ThemedText>
       </ThemedView>
@@ -347,6 +299,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginTop: 8,
+    flexWrap: 'wrap',
   },
   statusText: {
     fontSize: 14,
@@ -396,6 +349,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
     gap: 8,
+    maxHeight: 500,
   },
   chatHeader: {
     flexDirection: 'row',
@@ -442,6 +396,22 @@ const styles = StyleSheet.create({
   messageTextSent: {
     color: '#fff',
   },
+  messageOrigin: {
+    fontSize: 11,
+    opacity: 0.7,
+    marginBottom: 4,
+    color: '#666',
+  },
+  messageTime: {
+    fontSize: 10,
+    opacity: 0.6,
+    marginTop: 4,
+    color: '#666',
+  },
+  messageTimeSent: {
+    color: '#fff',
+    opacity: 0.8,
+  },
   chatInputContainer: {
     flexDirection: 'row',
     gap: 8,
@@ -472,114 +442,3 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 });
-
-// Device Chat Component
-function DeviceChat({
-  device,
-  onSendMessage,
-  onDisconnect,
-}: {
-  device: ConnectedDevice;
-  onSendMessage: (message: string) => void;
-  onDisconnect: () => void;
-}) {
-  const [messageInput, setMessageInput] = useState('');
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    // Scroll to bottom when new messages arrive
-    scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [device.messages]);
-
-  const handleSend = async () => {
-    if (messageInput.trim()) {
-      try {
-        await onSendMessage(messageInput.trim());
-        setMessageInput('');
-        // Scroll to bottom after sending
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      } catch (error) {
-        console.error('Error sending message:', error);
-        // Don't clear input on error so user can retry
-      }
-    }
-  };
-
-  return (
-    <ThemedView style={styles.deviceCard}>
-      <View style={styles.chatHeader}>
-        <View>
-          <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
-          <ThemedText style={styles.deviceId}>ID: {device.deviceId}</ThemedText>
-        </View>
-        <TouchableOpacity
-          style={[styles.button, styles.buttonDanger]}
-          onPress={onDisconnect}
-        >
-          <ThemedText style={styles.buttonText}>Disconnect</ThemedText>
-        </TouchableOpacity>
-      </View>
-
-      <ThemedView style={styles.chatContainer}>
-        <ScrollView 
-          style={styles.chatMessages}
-          ref={scrollViewRef}
-          onContentSizeChange={() => {
-            setTimeout(() => {
-              scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-          }}
-          nestedScrollEnabled
-        >
-          {device.messages.length === 0 ? (
-            <ThemedView style={styles.emptyMessagesContainer}>
-              <ThemedText style={styles.infoText}>No messages yet. Start a conversation!</ThemedText>
-            </ThemedView>
-          ) : (
-            device.messages.map((msg, index) => (
-              <View
-                key={`${msg.timestamp}-${index}`}
-                style={[
-                  styles.message,
-                  msg.sent ? styles.messageSent : styles.messageReceived,
-                ]}
-              >
-                <ThemedText
-                  style={[
-                    styles.messageText,
-                    msg.sent && styles.messageTextSent,
-                  ]}
-                >
-                  {msg.text}
-                </ThemedText>
-              </View>
-            ))
-          )}
-        </ScrollView>
-
-        <View style={styles.chatInputContainer}>
-          <TextInput
-            style={styles.chatInput}
-            value={messageInput}
-            onChangeText={setMessageInput}
-            placeholder="Type a message..."
-            placeholderTextColor="#999"
-            onSubmitEditing={handleSend}
-            multiline
-            returnKeyType="send"
-            blurOnSubmit={false}
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, !messageInput.trim() && styles.sendButtonDisabled]}
-            onPress={handleSend}
-            disabled={!messageInput.trim()}
-          >
-            <ThemedText style={[styles.buttonText, { fontSize: 14 }]}>Send</ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-    </ThemedView>
-  );
-}

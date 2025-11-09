@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run Expo app on all connected Android devices simultaneously
 # Usage: ./scripts/run-all-android-devices.sh
-# Note: Start Metro bundler separately with 'pnpm start' first!
+# Note: This script builds once and installs on all devices (more efficient)
 
 echo "🔍 Checking for connected Android devices..."
 
@@ -19,23 +19,46 @@ echo "$DEVICES" | while read device; do
 done
 
 echo ""
-echo "⚠️  IMPORTANT: Make sure Metro bundler is running first!"
-echo "   Start it with: pnpm start"
+echo "📦 Strategy: Build once, install on all devices"
 echo ""
-read -p "Press Enter to continue building for all devices..."
 
-# Run on each device in background
+# Option 1: Build APK once, then install on all devices
+echo "🚀 Building APK..."
+cd android
+./gradlew assembleDebug
+cd ..
+
+if [ $? -ne 0 ]; then
+    echo "❌ Build failed!"
+    exit 1
+fi
+
+APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+
+if [ ! -f "$APK_PATH" ]; then
+    echo "❌ APK not found at $APK_PATH"
+    exit 1
+fi
+
+echo "✅ Build successful!"
+echo ""
+echo "📱 Installing on all devices..."
+
+# Install on each device
 for device in $DEVICES; do
-    echo "📱 Building and installing on device: $device"
-    npx expo run:android --device "$device" &
-    DEVICE_PIDS="$DEVICE_PIDS $!"
+    echo "   Installing on $device..."
+    adb -s "$device" install -r "$APK_PATH"
+    if [ $? -eq 0 ]; then
+        echo "   ✅ Installed on $device"
+        # Start the app
+        adb -s "$device" shell am start -n com.anonymous.BLErelay/.MainActivity
+    else
+        echo "   ❌ Failed to install on $device"
+    fi
 done
 
-echo "✅ Started build/install process on all devices"
-echo "💡 Build processes are running in the background"
-echo "💡 Each device will install the app when the build completes"
-
-# Wait for all background jobs
-wait
-echo "✅ All builds completed!"
+echo ""
+echo "✅ Installation complete on all devices!"
+echo "💡 Start Metro bundler with: pnpm start"
+echo "💡 The app should automatically connect to Metro bundler"
 

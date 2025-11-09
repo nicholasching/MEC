@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { ADVERTISEMENT_MESSAGE, bleService, CHARACTERISTIC_UUID, DEVICE_ID, SERVICE_UUID } from '@/services/bleService';
+import { useCallback, useEffect, useState } from 'react';
 import { Device } from 'react-native-ble-plx';
-import { bleService, DEVICE_ID, ADVERTISEMENT_MESSAGE, SERVICE_UUID, CHARACTERISTIC_UUID } from '@/services/bleService';
 
 export interface DiscoveredDevice {
   device: Device;
@@ -9,19 +9,21 @@ export interface DiscoveredDevice {
   name: string;
 }
 
-export interface ConnectedDevice {
-  device: Device;
-  deviceId: string;
-  message: string;
-  name: string;
-  messages: Array<{ text: string; timestamp: number; sent: boolean }>;
+export interface GlobalMessage {
+  text: string;
+  timestamp: number;
+  originDeviceId: string;
+  senderDeviceId: string;
+  sent: boolean; // true if sent by this device
 }
 
 export function useBLE() {
   const [isAdvertising, setIsAdvertising] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredDevice[]>([]);
-  const [connectedDevices, setConnectedDevices] = useState<ConnectedDevice[]>([]);
+  const [connectedDevices, setConnectedDevices] = useState<DiscoveredDevice[]>([]);
+  const [globalMessages, setGlobalMessages] = useState<GlobalMessage[]>([]);
+  const [connectedDeviceCount, setConnectedDeviceCount] = useState(0);
   const [advertisementMessage, setAdvertisementMessage] = useState(ADVERTISEMENT_MESSAGE);
   const [error, setError] = useState<string | null>(null);
   const [deviceId] = useState(DEVICE_ID);
@@ -65,19 +67,12 @@ export function useBLE() {
         );
       }
 
-      const newConnectedDevice: ConnectedDevice = {
+      return [...prev, {
         device,
         deviceId,
         message,
         name: deviceName,
-        messages: message ? [{
-          text: message,
-          timestamp: Date.now(),
-          sent: false,
-        }] : [],
-      };
-
-      return [...prev, newConnectedDevice];
+      }];
     });
   }, []);
 
@@ -188,88 +183,53 @@ export function useBLE() {
     const interval = setInterval(() => {
       setIsAdvertising(bleService.getIsAdvertising());
       setIsScanning(bleService.getIsScanning());
+      setConnectedDeviceCount(bleService.getConnectedDeviceCount());
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Set up message listener for messages received via GATT
+  // Set up connected device count listener
   useEffect(() => {
-    const removeListener = bleService.onMessageReceived((deviceId, message) => {
-      console.log('📨 Message received via GATT:', deviceId, message);
-      setConnectedDevices((prev) => {
-        let found = false;
-        const updated = prev.map((device) => {
-          // Match by device.id (MAC address) or deviceId
-          const deviceIdMatch = device.device.id === deviceId || 
-                                device.deviceId === deviceId ||
-                                device.device.id.toLowerCase().replace(/[:-]/g, '') === deviceId.toLowerCase().replace(/[:-]/g, '');
-          
-          if (deviceIdMatch) {
-            found = true;
-            return {
-              ...device,
-              message, // Update current message
-              messages: [
-                ...device.messages,
-                {
-                  text: message,
-                  timestamp: Date.now(),
-                  sent: false,
-                },
-              ],
-            };
-          }
-          return device;
-        });
-        
-        // If device not found, check discovered devices
-        if (!found) {
-          setDiscoveredDevices((prevDiscovered) => {
-            const discoveredDevice = prevDiscovered.find((d) => 
-              d.device.id === deviceId ||
-              d.deviceId === deviceId ||
-              d.device.id.toLowerCase().replace(/[:-]/g, '') === deviceId.toLowerCase().replace(/[:-]/g, '')
-            );
-            
-            if (discoveredDevice) {
-              // Add to connected devices
-              const newConnectedDevice: ConnectedDevice = {
-                device: discoveredDevice.device,
-                deviceId: discoveredDevice.deviceId,
-                message,
-                name: discoveredDevice.name,
-                messages: [{
-                  text: message,
-                  timestamp: Date.now(),
-                  sent: false,
-                }],
-              };
-              setConnectedDevices((prevConnected) => {
-                const exists = prevConnected.some((d) => 
-                  d.device.id === discoveredDevice.device.id ||
-                  d.deviceId === discoveredDevice.deviceId
-                );
-                if (exists) {
-                  return prevConnected.map((d) => 
-                    d.device.id === discoveredDevice.device.id || d.deviceId === discoveredDevice.deviceId
-                      ? { ...d, message, messages: [...d.messages, { text: message, timestamp: Date.now(), sent: false }] }
-                      : d
-                  );
-                }
-                return [...prevConnected, newConnectedDevice];
-              });
-            }
-            
-            return prevDiscovered.map((d) => 
-              d.device.id === deviceId || d.deviceId === deviceId
-                ? { ...d, message }
-                : d
-            );
-          });
+    const removeListener = bleService.onConnectedDeviceCountChanged((count) => {
+      setConnectedDeviceCount(count);
+    });
+
+    return () => {
+      removeListener();
+    };
+  }, []);
+
+  // Set up message listener for global channel messages
+  useEffect(() => {
+    const removeListener = bleService.onMessageReceived((message, originDeviceId, senderDeviceId) => {
+      console.log('📨 Global channel message received:', { message, originDeviceId, senderDeviceId });
+      
+      // Add message to global channel
+      const isSentByMe = originDeviceId === DEVICE_ID;
+      const globalMessage: GlobalMessage = {
+        text: message,
+        timestamp: Date.now(),
+        originDeviceId,
+        senderDeviceId,
+        sent: isSentByMe,
+      };
+
+      setGlobalMessages((prev) => {
+        // Check for duplicates (same origin, timestamp, and text)
+        const isDuplicate = prev.some(
+          (msg) =>
+            msg.originDeviceId === originDeviceId &&
+            msg.text === message &&
+            Math.abs(msg.timestamp - globalMessage.timestamp) < 1000 // Within 1 second
+        );
+
+        if (isDuplicate) {
+          console.log('⚠️ Ignoring duplicate message in UI');
+          return prev;
         }
-        
-        return updated;
+
+        return [...prev, globalMessage];
       });
     });
 
@@ -318,56 +278,20 @@ export function useBLE() {
     };
   }, []);
 
-  // Send message via GATT
-  const sendMessage = useCallback(async (deviceId: string, message: string) => {
+  // Send message to global channel (broadcasts to all connected devices)
+  const sendMessage = useCallback(async (message: string) => {
     try {
       setError(null);
       
-      // Check if we're advertising (sending from server) or connected to a device (sending as client)
+      // Always broadcast to all connected devices via server
       if (isAdvertising) {
-        // If we're advertising, update the GATT server message (broadcasts to all connected devices)
         await bleService.sendMessageFromServer(message);
-        setAdvertisementMessage(message);
         
-        // Add message to all connected devices (since we're broadcasting)
-        setConnectedDevices((prev) => {
-          return prev.map((device) => {
-            return {
-              ...device,
-              messages: [
-                ...device.messages,
-                {
-                  text: message,
-                  timestamp: Date.now(),
-                  sent: true,
-                },
-              ],
-            };
-          });
-        });
+        // DON'T add message immediately here - it will be received through the message listener
+        // when the message is written to our characteristic or relayed back from other devices
+        // This prevents duplicate messages in the UI
       } else {
-        // Send to specific device via GATT write
-        await bleService.sendMessage(deviceId, message);
-        
-        // Add message to the specific device
-        setConnectedDevices((prev) => {
-          return prev.map((device) => {
-            if (device.device.id === deviceId || device.deviceId === deviceId) {
-              return {
-                ...device,
-                messages: [
-                  ...device.messages,
-                  {
-                    text: message,
-                    timestamp: Date.now(),
-                    sent: true,
-                  },
-                ],
-              };
-            }
-            return device;
-          });
-        });
+        throw new Error('Not advertising. Start advertising first to send messages.');
       }
     } catch (err: any) {
       const errorMsg = err?.message || 'Failed to send message';
@@ -390,6 +314,8 @@ export function useBLE() {
     isScanning,
     discoveredDevices,
     connectedDevices,
+    globalMessages,
+    connectedDeviceCount,
     advertisementMessage,
     error,
     deviceId,
