@@ -65,11 +65,11 @@ class BLEService {
   private connectedDeviceCount: number = 0; // Connected device counter
   private processedMessageIds: Set<string> = new Set(); // Track processed messages to prevent duplicates
   
-  constructor() {
-    this.manager = new BleManager();
-    // Auto-start advertising and scanning when Bluetooth is ready
-    this.setupAutoStart();
-  }
+  // constructor() {
+  //   this.manager = new BleManager();
+  //   // Auto-start advertising and scanning when Bluetooth is ready
+  //   this.setupAutoStart();
+  // }
 
   /**
    * Auto-start advertising and scanning when Bluetooth is ready
