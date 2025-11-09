@@ -1,6 +1,6 @@
-import { ADVERTISEMENT_MESSAGE, bleService, CHARACTERISTIC_UUID, DEVICE_ID, SERVICE_UUID } from '@/services/bleService';
-import { useCallback, useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Device } from 'react-native-ble-plx';
+import { bleService, DEVICE_ID, ADVERTISEMENT_MESSAGE, SERVICE_UUID, CHARACTERISTIC_UUID } from '@/services/bleService';
 
 export interface DiscoveredDevice {
   device: Device;
@@ -287,9 +287,16 @@ export function useBLE() {
       if (isAdvertising) {
         await bleService.sendMessageFromServer(message);
         
-        // DON'T add message immediately here - it will be received through the message listener
-        // when the message is written to our characteristic or relayed back from other devices
-        // This prevents duplicate messages in the UI
+        // Message will be added via the message listener
+        // But we can add it immediately for better UX
+        const globalMessage: GlobalMessage = {
+          text: message,
+          timestamp: Date.now(),
+          originDeviceId: DEVICE_ID,
+          senderDeviceId: DEVICE_ID,
+          sent: true,
+        };
+        setGlobalMessages((prev) => [...prev, globalMessage]);
       } else {
         throw new Error('Not advertising. Start advertising first to send messages.');
       }

@@ -44,7 +44,7 @@ class BleGattServer(private val context: Context) {
     private var gattServer: BluetoothGattServer? = null
     private var currentMessage: String = ""
     private var connectedDevices: MutableSet<BluetoothDevice> = mutableSetOf()
-    private var messageUpdateCallback: ((String, String) -> Unit)? = null
+    private var messageUpdateCallback: ((String) -> Unit)? = null
     
     /**
      * Initialize and start the GATT server
@@ -156,9 +156,8 @@ class BleGattServer(private val context: Context) {
     
     /**
      * Set callback for message updates from clients
-     * Callback receives: (message: String, deviceAddress: String)
      */
-    fun setMessageUpdateCallback(callback: (String, String) -> Unit) {
+    fun setMessageUpdateCallback(callback: (String) -> Unit) {
         messageUpdateCallback = callback
     }
     
@@ -270,31 +269,18 @@ class BleGattServer(private val context: Context) {
                 val messageBytes = message.toByteArray(Charsets.UTF_8)
                 characteristic.value = messageBytes
                 
-                // Notify callback with message and device address - this will trigger React Native to process the message
-                // The callback should update the characteristic value and trigger notifications
-                messageUpdateCallback?.invoke(message, device.address)
+                // Notify callback (React Native will handle broadcasting to other devices)
+                // Don't notify other devices here - let React Native handle routing to prevent loops
+                messageUpdateCallback?.invoke(message)
                 
                 if (responseNeeded) {
                     gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
                 }
                 
-                // IMPORTANT: We need to notify the LOCAL device (the one running this GATT server)
-                // so that the React Native client receives the message through notifications
-                // The React Native client will then handle routing and broadcasting to other devices
-                // We notify the device that wrote to us, so it can receive the message back
-                // Actually, we should notify ALL connected devices EXCEPT the one that wrote
-                // But the React Native client will handle this, so we just notify the writing device
-                // to trigger its notification handler
-                
-                // Actually, the issue is that when Device A writes to Device B's characteristic,
-                // Device B's GATT server receives it and should notify Device B's React Native client.
-                // But we removed the notification. We need to notify the LOCAL React Native client
-                // by updating the characteristic and having the client monitor it.
-                // The callback already does this by updating currentMessage, but we need to make sure
-                // the React Native client is monitoring the characteristic.
-                
-                // The callback will be called, which should trigger the React Native client's notification handler
-                // But we also need to make sure the characteristic value is updated so notifications work
+                // Note: We don't notify other connected devices here because:
+                // 1. React Native client will handle broadcasting with proper routing (origin tracking, hop count)
+                // 2. This prevents double-broadcasting and message loops
+                // 3. The React Native client has logic to prevent re-broadcasting messages from self
                 
                 Log.d(TAG, "Message received from ${device.address}: ${message.take(50)}... (${message.length} chars)")
             } else {

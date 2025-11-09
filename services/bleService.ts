@@ -1,4 +1,4 @@
-import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { BleManager, Characteristic, Device, Service, State } from 'react-native-ble-plx';
 import BleAdvertise from '../modules/ble-advertise/src/index';
 import { requestBluetoothPermissions } from '../utils/permissions';
@@ -64,54 +64,11 @@ class BLEService {
   private baseReconnectDelay: number = 1000; // 1 second
   private connectedDeviceCount: number = 0; // Connected device counter
   private processedMessageIds: Set<string> = new Set(); // Track processed messages to prevent duplicates
-  private autoRestartTimer: ReturnType<typeof setInterval> | null = null; // Timer to check and restart advertising/scanning
   
   constructor() {
     this.manager = new BleManager();
     // Auto-start advertising and scanning when Bluetooth is ready
     this.setupAutoStart();
-    // Set up listener for GATT server messages (when we receive writes as a server)
-    this.setupGattServerMessageListener();
-  }
-
-  /**
-   * Set up listener for messages received by GATT server
-   * When another device writes to our characteristic, the native module emits an event
-   */
-  private setupGattServerMessageListener() {
-    if (Platform.OS === 'android') {
-      try {
-        const { BleAdvertiseModule } = NativeModules;
-        if (BleAdvertiseModule) {
-          const eventEmitter = new NativeEventEmitter(BleAdvertiseModule);
-          eventEmitter.addListener('onGattServerMessageReceived', (data: { message: string; deviceAddress: string }) => {
-            console.log('📨 Message received via GATT server from:', data.deviceAddress, data.message);
-            // Find the device that sent this message by matching the address
-            // The deviceAddress is the Bluetooth MAC address
-            let senderDeviceId: string | null = null;
-            for (const [deviceId, device] of this.connectedDevices.entries()) {
-              // Compare addresses (device.id is usually the MAC address)
-              if (device.id.toLowerCase().replace(/[:-]/g, '') === data.deviceAddress.toLowerCase().replace(/[:-]/g, '')) {
-                senderDeviceId = deviceId;
-                break;
-              }
-            }
-            
-            // If we can't find the device, use the address as the device ID
-            if (!senderDeviceId) {
-              senderDeviceId = data.deviceAddress;
-              console.log('⚠️ Could not find connected device for address, using address as ID:', data.deviceAddress);
-            }
-            
-            // Process the message - it should contain routing info in JSON format
-            this.handleRoutedMessage(data.message, senderDeviceId);
-          });
-          console.log('✅ Set up GATT server message listener');
-        }
-      } catch (error) {
-        console.error('Error setting up GATT server message listener:', error);
-      }
-    }
   }
 
   /**
@@ -122,72 +79,26 @@ class BLEService {
       console.log('BLE State:', state);
       if (state === State.PoweredOn) {
         console.log('Bluetooth is powered on - auto-starting...');
-        await this.ensureAdvertisingAndScanning();
-      } else if (state === State.PoweredOff) {
-        console.log('Bluetooth is powered off');
-        this.isAdvertising = false;
-        this.isScanning = false;
-      }
-    }, true);
-
-    // Set up periodic check to ensure advertising and scanning are running
-    this.autoRestartTimer = setInterval(async () => {
-      const state = await this.manager.state();
-      if (state === State.PoweredOn) {
-        await this.ensureAdvertisingAndScanning();
-      }
-    }, 5000); // Check every 5 seconds
-  }
-
-  /**
-   * Ensure advertising and scanning are running, restart if not
-   */
-  private async ensureAdvertisingAndScanning() {
-    try {
-      // Wait a bit for permissions to be ready
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Check and start advertising if not running
-      if (!this.isAdvertising) {
-        console.log('🔄 Advertising stopped, restarting...');
         try {
+          // Wait a bit for permissions to be ready
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Start advertising
           await this.startAdvertising(ADVERTISEMENT_MESSAGE);
-        } catch (error) {
-          console.error('Error restarting advertising:', error);
-        }
-      }
-
-      // Check and start scanning if not running
-      if (!this.isScanning) {
-        console.log('🔄 Scanning stopped, restarting...');
-        try {
+          
+          // Start scanning and auto-connecting
           await this.startScanning((device, deviceId, message) => {
             // Device connected callback
             console.log(`Auto-connected to device: ${deviceId}`);
-            // Don't send connection message here - it's sent in connectToDevice
           });
         } catch (error) {
-          console.error('Error restarting scanning:', error);
+          console.error('Error auto-starting BLE:', error);
+          // Don't throw - auto-start failures should be non-blocking
         }
+      } else if (state === State.PoweredOff) {
+        console.log('Bluetooth is powered off');
       }
-    } catch (error) {
-      console.error('Error ensuring advertising and scanning:', error);
-      // Don't throw - auto-restart failures should be non-blocking
-    }
-  }
-
-  /**
-   * Send "I have connected." message to global channel
-   */
-  private async sendConnectionMessage() {
-    try {
-      if (this.isAdvertising) {
-        await this.sendMessageFromServer('I have connected.');
-      }
-    } catch (error) {
-      console.error('Error sending connection message:', error);
-      // Don't throw - connection message failures should be non-blocking
-    }
+    }, true);
   }
 
   /**
@@ -271,7 +182,7 @@ class BLEService {
   }
 
   /**
-   * Stop advertising (for manual control - auto-restart will restart it)
+   * Stop advertising
    */
   async stopAdvertising(): Promise<void> {
     try {
@@ -286,7 +197,7 @@ class BLEService {
         }
         
         this.isAdvertising = false;
-        console.log('Stopped advertising (will auto-restart)');
+        console.log('Stopped advertising');
       }
     } catch (error) {
       console.error('Error stopping advertising:', error);
@@ -506,30 +417,6 @@ class BLEService {
 
         // Call onDeviceFound callback
         onDeviceFound(connectedDevice, deviceId, message);
-
-        // Send "I have connected." message when we connect to a device
-        // Use a debounce mechanism to prevent duplicate messages
-        const connectionMessageKey = `conn-msg-${deviceId}-${Date.now()}`;
-        
-        // Check if we've sent a connection message for this device recently (within last 5 seconds)
-        const recentKeys = Array.from(this.processedMessageIds).filter(id => 
-          id.startsWith(`conn-msg-${deviceId}-`) && 
-          Date.now() - parseInt(id.split('-').pop() || '0') < 5000
-        );
-        
-        if (recentKeys.length === 0 && this.isAdvertising) {
-          // Mark that we're about to send a connection message for this device
-          this.processedMessageIds.add(connectionMessageKey);
-          
-          // Wait a bit to ensure connection is stable
-          setTimeout(() => {
-            this.sendConnectionMessage();
-            // Clean up the key after 10 seconds
-            setTimeout(() => {
-              this.processedMessageIds.delete(connectionMessageKey);
-            }, 10000);
-          }, 1500);
-        }
       } catch (error) {
         console.error(`Error reading message from ${deviceId}:`, error);
       }
@@ -650,26 +537,18 @@ class BLEService {
         };
       }
 
-      // Create unique message ID (origin + timestamp + message text)
-      // Use full message text to ensure uniqueness
-      const messageId = `${routedMessage.origin}-${routedMessage.timestamp}-${routedMessage.message}`;
+      // Create unique message ID (origin + timestamp + first 10 chars of message)
+      const messageId = `${routedMessage.origin}-${routedMessage.timestamp}-${routedMessage.message.substring(0, 10)}`;
       
       // Check if we've already processed this message
       if (this.processedMessageIds.has(messageId)) {
-        console.log(`⚠️ Ignoring duplicate message: ${messageId.substring(0, 50)}...`);
+        console.log(`⚠️ Ignoring duplicate message: ${messageId}`);
         return;
       }
 
-      // Check if message originated from this device (prevent rebroadcasting own messages)
-      // If it's from self and already processed, just ignore it (was already shown in UI)
-      // If it's from self and not processed, it might be from a notification, so process it once
-      const isFromSelf = routedMessage.origin === DEVICE_ID;
-      if (isFromSelf) {
-        // Don't rebroadcast messages from self (prevents loops)
-        // If already processed, it was shown in UI when we sent it, so just ignore
-        // If not processed, it might be from a notification, but we should ignore it
-        // because we already showed it when we sent it
-        console.log(`⚠️ Ignoring message from self (already shown in UI): ${routedMessage.message.substring(0, 50)}...`);
+      // Check if message originated from this device (prevent loops)
+      if (routedMessage.origin === DEVICE_ID) {
+        console.log(`⚠️ Ignoring message from self: ${routedMessage.message.substring(0, 50)}...`);
         return;
       }
 
@@ -832,7 +711,7 @@ class BLEService {
   }
 
   /**
-   * Stop scanning (for manual control - auto-restart will restart it)
+   * Stop scanning
    */
   stopScanning(): void {
     if (this.scanSubscription) {
@@ -849,7 +728,7 @@ class BLEService {
       this.reconnectAttempts.clear();
       this.manualDisconnects.clear();
       
-      console.log('Stopped scanning (will auto-restart)');
+      console.log('Stopped scanning');
     }
   }
 
@@ -902,10 +781,7 @@ class BLEService {
       // react-native-ble-plx and Android BLE stack handle long writes automatically
       // With larger MTU (517 bytes), we can send much longer messages (up to ~512 bytes payload)
       await characteristic.writeWithResponse(base64Message);
-      const device = this.connectedDevices.get(deviceId);
-      const deviceAddress = device?.id || deviceId;
-      console.log(`✅ Message sent to ${deviceId} (${deviceAddress}): ${message.substring(0, 50)}... (${messageBytes.length} bytes)`);
-      console.log(`   Message JSON: ${messageToSend.substring(0, 100)}...`);
+      console.log(`✅ Message sent to ${deviceId}: ${message.substring(0, 50)}... (${messageBytes.length} bytes)`);
     } catch (error: any) {
       console.error('Error sending message:', error);
       throw error;
@@ -933,29 +809,6 @@ class BLEService {
       // Serialize to JSON
       const messageJson = JSON.stringify(routedMessage);
 
-      // Mark message as processed immediately to prevent duplicate processing
-      // This ensures if the message comes back through notifications, it won't be processed again
-      const messageId = `${routedMessage.origin}-${routedMessage.timestamp}-${routedMessage.message}`;
-      
-      // Only mark as processed and notify if we have connected devices to send to
-      // Otherwise, we're just storing the message for when devices connect
-      if (this.connectedDevices.size > 0) {
-        this.processedMessageIds.add(messageId);
-        
-        // Clean up old message IDs (keep last 100)
-        if (this.processedMessageIds.size > 100) {
-          const idsArray = Array.from(this.processedMessageIds);
-          this.processedMessageIds.clear();
-          idsArray.slice(-100).forEach(id => this.processedMessageIds.add(id));
-        }
-
-        // Notify local listeners immediately so the message appears in our UI once
-        // This ensures the message appears immediately without waiting for it to come back through notifications
-        this.messageListeners.forEach((listener) => {
-          listener(routedMessage.message, routedMessage.origin, DEVICE_ID);
-        });
-      }
-
       // Broadcast to all connected devices
       const broadcastPromises: Promise<void>[] = [];
       this.connectedDevices.forEach((device, deviceId) => {
@@ -966,13 +819,19 @@ class BLEService {
         );
       });
 
-      // Don't update GATT server message here - it might trigger notifications on our own device
-      // The message is already being broadcast to all connected devices via sendMessage
-      // Updating the GATT server message is only needed for new connections to read the initial message
+      // Also update GATT server message for new connections
+      if (Platform.OS === 'android' && BleAdvertise.isAvailable()) {
+        await BleAdvertise.setMessage(messageJson);
+      }
 
       // Wait for all sends (don't block on errors)
       await Promise.allSettled(broadcastPromises);
       console.log(`✅ Broadcasted message to ${broadcastPromises.length} device(s): ${message.substring(0, 50)}...`);
+      
+      // Notify local listeners (for UI update)
+      this.messageListeners.forEach((listener) => {
+        listener(message, DEVICE_ID, DEVICE_ID);
+      });
     } catch (error: any) {
       console.error('Error sending message from server:', error);
       throw error;
@@ -1063,12 +922,6 @@ class BLEService {
    * Cleanup
    */
   destroy(): void {
-    // Clear auto-restart timer
-    if (this.autoRestartTimer) {
-      clearInterval(this.autoRestartTimer);
-      this.autoRestartTimer = null;
-    }
-
     this.stopScanning();
     this.stopAdvertising();
     

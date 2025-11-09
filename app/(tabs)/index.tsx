@@ -2,7 +2,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   const {
@@ -17,9 +17,14 @@ export default function HomeScreen() {
     deviceId,
     serviceUuid,
     characteristicUuid,
+    startAdvertising,
+    stopAdvertising,
+    startScanning,
+    stopScanning,
     connectToDevice,
     disconnectDevice,
     sendMessage,
+    setAdvertisementMessage,
   } = useBLE();
 
   const [messageInput, setMessageInput] = useState('');
@@ -29,6 +34,64 @@ export default function HomeScreen() {
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [globalMessages]);
+
+  const handleStartAdvertising = async () => {
+    try {
+      console.log('🔄 handleStartAdvertising called');
+      console.log('🔄 Message:', messageInput || advertisementMessage);
+      
+      // Permissions will be requested automatically by the service
+      // The permission dialog will show if permissions are not granted
+      await startAdvertising(messageInput || advertisementMessage);
+      
+      console.log('🔄 startAdvertising completed successfully');
+      
+      if (Platform.OS === 'android') {
+        Alert.alert('Success', 'Started BLE advertising! Your device is now discoverable.');
+      } else {
+        Alert.alert('Success', 'Started advertising (simulated mode on iOS)');
+      }
+    } catch (err: any) {
+      console.error('❌ Error in handleStartAdvertising:', err);
+      console.error('❌ Error message:', err?.message);
+      console.error('❌ Error code:', err?.code);
+      console.error('❌ Full error:', err);
+      
+      const errorMessage = err?.message || err?.toString() || 'Failed to start advertising';
+      
+      // Don't show duplicate alerts - permission function already shows alerts
+      if (errorMessage.includes('permission') || err?.code === 'PERMISSION_DENIED') {
+        // Permission alert is already shown by requestBluetoothPermissions
+        // Just log it here
+        console.log('Permission error handled by permission request function');
+      } else if (errorMessage.includes('too large')) {
+        Alert.alert(
+          'Message Too Long',
+          'Message is too large. Maximum message size is approximately 512 bytes per GATT write.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
+    }
+  };
+
+  const handleStopAdvertising = async () => {
+    try {
+      await stopAdvertising();
+      Alert.alert('Success', 'Stopped advertising');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to stop advertising');
+    }
+  };
+
+  const handleStartScanning = async () => {
+    try {
+      await startScanning();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to start scanning');
+    }
+  };
 
   const handleConnect = async (device: DiscoveredDevice) => {
     try {
@@ -175,9 +238,9 @@ export default function HomeScreen() {
               maxLength={500}
             />
             <TouchableOpacity
-              style={[styles.sendButton, !messageInput.trim() && styles.sendButtonDisabled]}
+              style={[styles.sendButton, (!messageInput.trim() || !isAdvertising) && styles.sendButtonDisabled]}
               onPress={handleSendMessage}
-              disabled={!messageInput.trim()}
+              disabled={!messageInput.trim() || !isAdvertising}
             >
               <ThemedText style={[styles.buttonText, { fontSize: 14 }]}>Send</ThemedText>
             </TouchableOpacity>
@@ -185,6 +248,83 @@ export default function HomeScreen() {
         </ThemedView>
       </ThemedView>
 
+      {/* Advertising Section */}
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Advertising</ThemedText>
+        <ThemedText style={styles.description}>
+          {Platform.OS === 'android' 
+            ? 'Advertise this device with GATT server. Devices will automatically connect when discovered. Auto-starts on app launch.'
+            : '⚠️ iOS: Simulated mode only - this device will NOT be discoverable. Native GATT server requires Android.'}
+        </ThemedText>
+
+        <ThemedView style={styles.buttonRow}>
+          {!isAdvertising ? (
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonPrimary]}
+              onPress={handleStartAdvertising}
+            >
+              <ThemedText style={styles.buttonText}>
+                Start Advertising
+              </ThemedText>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonDanger]}
+              onPress={handleStopAdvertising}
+            >
+              <ThemedText style={styles.buttonText}>
+                Stop Advertising
+              </ThemedText>
+            </TouchableOpacity>
+          )}
+        </ThemedView>
+
+        {isAdvertising && (
+          <ThemedView style={styles.statusContainer}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <ThemedView style={styles.statusTextContainer}>
+              <ThemedText style={styles.statusText}>Advertising: {advertisementMessage}</ThemedText>
+            </ThemedView>
+          </ThemedView>
+        )}
+      </ThemedView>
+
+      {/* Scanning Section */}
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Scanning</ThemedText>
+        <ThemedText style={styles.description}>
+          Scan for nearby BLE devices advertising the service UUID. Devices will automatically connect and join the global channel. Auto-starts on app launch.
+        </ThemedText>
+
+        <ThemedView style={styles.buttonRow}>
+          {!isScanning ? (
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonPrimary]}
+              onPress={handleStartScanning}
+            >
+              <ThemedText style={styles.buttonText}>
+                Start Scanning
+              </ThemedText>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonDanger]}
+              onPress={stopScanning}
+            >
+              <ThemedText style={styles.buttonText}>
+                Stop Scanning
+              </ThemedText>
+            </TouchableOpacity>
+          )}
+        </ThemedView>
+
+        {isScanning && (
+          <ThemedView style={styles.statusContainer}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <ThemedText style={styles.statusText}>Scanning for devices...</ThemedText>
+          </ThemedView>
+        )}
+      </ThemedView>
 
       {/* Connected Devices Section */}
       {connectedDevices.length > 0 && (
@@ -212,11 +352,9 @@ export default function HomeScreen() {
         <ThemedText type="subtitle" style={styles.sectionTitle}>Information</ThemedText>
         <ThemedText style={styles.infoText}>
           • Advertising and scanning start automatically when the app launches{'\n'}
-          • Advertising and scanning will automatically restart if they stop{'\n'}
           • Messages are broadcast to all connected devices{'\n'}
           • Messages are automatically relayed (max 5 hops) to reach all devices{'\n'}
           • Messages from your device are not re-broadcast (prevents loops){'\n'}
-          • "I have connected." message is sent when a device connects{'\n'}
           • Make sure Bluetooth is enabled on your device{'\n'}
           • Grant Bluetooth and location permissions (required for BLE on Android){'\n'}
           • Devices will be discovered when advertising and within range (~10 meters)

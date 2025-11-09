@@ -9,7 +9,6 @@ import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
-import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
@@ -170,19 +169,10 @@ class BleAdvertiseModule(reactContext: ReactApplicationContext) : ReactContextBa
             }
             
             // Set up message update callback
-            gattServer!!.setMessageUpdateCallback { updatedMessage, deviceAddress ->
+            gattServer!!.setMessageUpdateCallback { updatedMessage ->
                 currentMessage = updatedMessage
-                // Emit event to React Native so it can process the message
-                Log.d(TAG, "Message received via GATT write from ${deviceAddress}: ${updatedMessage.take(50)}...")
-                
-                // Send event to React Native to process the message
-                val params = Arguments.createMap().apply {
-                    putString("message", updatedMessage)
-                    putString("deviceAddress", deviceAddress) // Address of the device that wrote to us
-                }
-                reactApplicationContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    .emit("onGattServerMessageReceived", params)
+                // Emit event to React Native if needed
+                Log.d(TAG, "Message updated via GATT: ${updatedMessage.take(50)}...")
             }
             
             // Create advertisement data with service UUID
