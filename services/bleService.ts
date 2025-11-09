@@ -63,7 +63,8 @@ class BLEService {
   private connectedDeviceCount: number = 0; // Connected device counter
   private processedMessageIds: Set<string> = new Set(); // Track processed messages to prevent duplicates
   private notificationListeners: Set<(title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void> = new Set();
-  private debugMode: boolean = __DEV__; // Enable debug notifications in development mode by default
+//   private debugMode: boolean = __DEV__; // Enable debug notifications in development mode by default
+  private debugMode: boolean = false; // Enable debug notifications in development mode by default
   private lastBluetoothState: State | null = null; // Track last Bluetooth state to avoid duplicate handling
   private isInitialStart: boolean = true; // Track if this is the initial app start
   
