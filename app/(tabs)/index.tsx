@@ -115,6 +115,16 @@ export default function HomeScreen() {
         <ThemedText style={styles.infoText}>Devices advertise service UUID, then connect via GATT for messaging</ThemedText> */}
         {/* <ThemedText style={styles.subtitle}>Users Connected:</ThemedText>
         <ThemedText style={styles.subtitle}>1000000</ThemedText> */}
+        <ThemedView style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: "#222", padding: 16, borderRadius: 12}}>
+          <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
+
+
+            <ThemedView style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 2}}>
+              <ThemedText style={{ fontSize: 24, fontWeight: '400' }}>Users{"\n"}connected</ThemedText>
+              <ThemedText style={{ fontSize: 64, fontWeight: '700' }}>78</ThemedText>
+            </ThemedView>
+          </ThemedView>
+        </ThemedView>
       </ThemedView>
 
       {/* Advertising Section */}
@@ -279,7 +289,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: '500',
-    marginBottom: 64,
+    marginBottom: 32,
     marginTop: 32,
   },
   subtitle: {
