@@ -2,7 +2,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ConnectedDevice, DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   const {
@@ -104,7 +104,8 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <ThemedView style={styles.section}>
         <ThemedText type="title" style={styles.title}>BLE Relay</ThemedText>
         <ThemedText style={styles.subtitle}>Device ID: {deviceId}</ThemedText>
@@ -270,13 +271,20 @@ export default function HomeScreen() {
           • Devices will be discovered when advertising and within range (~10 meters)
         </ThemedText>
       </ThemedView>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  safe: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 24,
   },
   section: {
     padding: 16,

@@ -45,10 +45,10 @@ class BLEService {
   private connectionListeners: Set<(deviceId: string, connected: boolean) => void> = new Set();
   private deviceCharacteristics: Map<string, Characteristic> = new Map(); // deviceId -> Characteristic
   
-  constructor() {
-    this.manager = new BleManager();
-    this.setupStateListener();
-  }
+  // constructor() {
+  //   this.manager = new BleManager();
+  //   this.setupStateListener();
+  // }
 
   private setupStateListener() {
     this.stateSubscription = this.manager.onStateChange((state: State) => {
