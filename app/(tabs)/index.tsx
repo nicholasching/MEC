@@ -1,7 +1,7 @@
 // Using native Text/View for a simplified UI
 import { DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   const {
@@ -127,8 +127,11 @@ export default function HomeScreen() {
 
   // Chat Page Component
   if (showChatPage) {
+    const statusBarHeight = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
+      <View style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
+        <View style={{ paddingTop: statusBarHeight, flex: 1 }}>
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -337,7 +340,8 @@ export default function HomeScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+        </View>
+      </View>
     );
   }
 
