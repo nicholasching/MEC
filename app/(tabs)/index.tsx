@@ -1,7 +1,7 @@
 // Using native Text/View for a simplified UI
 import { DiscoveredDevice, useBLE } from '@/hooks/useBLE';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   const {
@@ -38,12 +38,31 @@ export default function HomeScreen() {
     }
   }, [globalMessages, showChatPage]);
 
+  // Handle Android back button
+  useEffect(() => {
+    const backAction = () => {
+      if (showChatPage) {
+        Keyboard.dismiss();
+        setShowChatPage(false);
+        return true; // Prevent default behavior
+      }
+      return false; // Let default behavior happen
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [showChatPage]);
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   const handleConnect = async (device: DiscoveredDevice) => {
     try {
@@ -74,6 +93,18 @@ export default function HomeScreen() {
       } catch (error) {
         console.error('Error sending message:', error);
       }
+    }
+  };
+
+  const handleQuickMessage = async (message: string) => {
+    try {
+      await sendMessage(message);
+      setShowChatPage(true);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (error) {
+      console.error('Error sending quick message:', error);
     }
   };
 
@@ -108,8 +139,12 @@ export default function HomeScreen() {
 
   // Chat Page Component
   if (showChatPage) {
+    const statusBarHeight = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
+      <View style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
+        <View style={{ paddingTop: statusBarHeight, flex: 1 }}>
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -318,7 +353,9 @@ export default function HomeScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+        </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
@@ -366,9 +403,6 @@ export default function HomeScreen() {
             }}>
               Disaster Response
             </Text>
-            <Text style={{ fontSize: 13, color: '#666', fontWeight: '500' }}>
-              Offline mesh network • Device {deviceId.substring(0, 8)}...
-            </Text>
           </View>
 
           {/* Error Banner */}
@@ -386,62 +420,8 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Stats Cards */}
-          <View style={{ 
-            flexDirection: 'row', 
-            paddingHorizontal: 20,
-            marginBottom: 24,
-            gap: 12,
-          }}>
-            <View style={{ 
-              flex: 1,
-              backgroundColor: '#1a1a1a',
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#2a2a2a',
-            }}>
-              <Text style={{ fontSize: 10, color: '#10b981', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Connected
-              </Text>
-              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
-                {connectedDeviceCount}
-              </Text>
-            </View>
-            <View style={{ 
-              flex: 1,
-              backgroundColor: '#1a1a1a',
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#2a2a2a',
-            }}>
-              <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Messages
-              </Text>
-              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
-                {globalMessages.length}
-              </Text>
-            </View>
-            <View style={{ 
-              flex: 1,
-              backgroundColor: '#1a1a1a',
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#2a2a2a',
-            }}>
-              <Text style={{ fontSize: 11, color: getSignalColor(), fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Signal
-              </Text>
-              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
-                {getSignalStrength()}
-              </Text>
-            </View>
-          </View>
-
           {/* Big Chat Button */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => setShowChatPage(true)}
@@ -516,6 +496,186 @@ export default function HomeScreen() {
                 </View>
               )}
             </TouchableOpacity>
+          </View>
+
+          {/* Quick Emergency Buttons */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+            <Text style={{ 
+              fontSize: 12, 
+              fontWeight: '400', 
+              color: '#999', 
+              marginTop: 8,
+              marginBottom: 16,
+              margin: "auto",
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+            }}>
+              Quick Emergency Messages
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleQuickMessage('HELP - Need assistance immediately')}
+                style={{
+                  backgroundColor: '#991b1b',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#b91c1c',
+                  flex: 1,
+                  minWidth: '48%',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff', textAlign: 'center' }}>
+                  HELP
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleQuickMessage('MEDICAL EMERGENCY - Urgent medical help needed')}
+                style={{
+                  backgroundColor: '#991b1b',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#b91c1c',
+                  flex: 1,
+                  minWidth: '48%',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff', textAlign: 'center' }}>
+                  MEDICAL
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleQuickMessage('TRAPPED - Cannot move, need rescue')}
+                style={{
+                  backgroundColor: '#991b1b',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#b91c1c',
+                  flex: 1,
+                  minWidth: '48%',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff', textAlign: 'center' }}>
+                  TRAPPED
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleQuickMessage('FLOOD - Water rising, danger zone')}
+                style={{
+                  backgroundColor: '#991b1b',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#b91c1c',
+                  flex: 1,
+                  minWidth: '48%',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff', textAlign: 'center' }}>
+                  FLOOD
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleQuickMessage('FIRE - Active fire in area')}
+                style={{
+                  backgroundColor: '#991b1b',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#b91c1c',
+                  flex: 1,
+                  minWidth: '48%',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff', textAlign: 'center' }}>
+                  FIRE
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleQuickMessage('MUST EVACUATE - Leave area immediately')}
+                style={{
+                  backgroundColor: '#991b1b',
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#b91c1c',
+                  flex: 1,
+                  minWidth: '48%',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff', textAlign: 'center' }}>
+                  EVACUATE
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Stats Cards */}
+          <View style={{ 
+            flexDirection: 'row', 
+            paddingHorizontal: 20,
+            marginBottom: 24,
+            gap: 12,
+          }}>
+            <View style={{ 
+              flex: 1,
+              backgroundColor: '#1a1a1a',
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: '#2a2a2a',
+            }}>
+              <Text style={{ fontSize: 10, color: '#10b981', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Connected
+              </Text>
+              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
+                {connectedDeviceCount}
+              </Text>
+            </View>
+            <View style={{ 
+              flex: 1,
+              backgroundColor: '#1a1a1a',
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: '#2a2a2a',
+            }}>
+              <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Messages
+              </Text>
+              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
+                {globalMessages.length}
+              </Text>
+            </View>
+            <View style={{ 
+              flex: 1,
+              backgroundColor: '#1a1a1a',
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: '#2a2a2a',
+            }}>
+              <Text style={{ fontSize: 11, color: getSignalColor(), fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Signal
+              </Text>
+              <Text style={{ fontSize: 36, fontWeight: '800', color: '#fff' }}>
+                {getSignalStrength()}
+              </Text>
+            </View>
           </View>
 
           {/* Network Status */}
@@ -714,17 +874,7 @@ export default function HomeScreen() {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                  <View style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: '#2a2a2a',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 10,
-                  }}>
-                    <Text style={{ fontSize: 16 }}>ℹ️</Text>
-                  </View>
+
                   <Text style={{ fontSize: 14, fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     System Information
                   </Text>
