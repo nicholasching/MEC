@@ -30,9 +30,6 @@ export const CHARACTERISTIC_UUID = '5f1b1461-160a-4e99-b268-b9c8ef2c0abb';
 // Format: 0000XXXX-0000-1000-8000-00805f9b34fb where XXXX is the 16-bit value
 export const ADVERTISEMENT_SERVICE_UUID_16BIT = '0000597D-0000-1000-8000-00805f9b34fb';
 
-// Client Characteristic Configuration Descriptor UUID (for notifications)
-const CLIENT_CHARACTERISTIC_CONFIG_UUID = '00002902-0000-1000-8000-00805f9b34fb';
-
 // Message format for global channel with routing
 interface RoutedMessage {
   origin: string; // Original sender device ID
@@ -60,10 +57,12 @@ class BLEService {
   private reconnectAttempts: Map<string, number> = new Map(); // deviceId -> reconnect attempt count
   private manualDisconnects: Set<string> = new Set(); // deviceId -> manually disconnected devices
   private reconnectCallbacks: Map<string, (device: Device, deviceId: string, message: string) => void> = new Map(); // deviceId -> callback
-  private maxReconnectAttempts: number = 10;
+  // In reality, this should be a lot higher in an emergency situation as you want to make sure you try hardest to connect with others
+  private maxReconnectAttempts: number = 20;
   private baseReconnectDelay: number = 1000; // 1 second
   private connectedDeviceCount: number = 0; // Connected device counter
   private processedMessageIds: Set<string> = new Set(); // Track processed messages to prevent duplicates
+  private notificationListeners: Set<(title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void> = new Set();
   
   constructor() {
     this.manager = new BleManager();
@@ -75,6 +74,7 @@ class BLEService {
    * Auto-start advertising and scanning when Bluetooth is ready
    */
   private setupAutoStart() {
+    // Start listening once bluetooth is available
     this.stateSubscription = this.manager.onStateChange(async (state: State) => {
       console.log('BLE State:', state);
       if (state === State.PoweredOn) {
@@ -145,6 +145,7 @@ class BLEService {
           console.log(`Device ID: ${DEVICE_ID}`);
           console.log(`Service UUID: ${SERVICE_UUID}`);
           console.log(`Initial message: ${message}`);
+          this.postNotification('Advertising Started', 'Device is now discoverable and accepting connections', 'success');
         } catch (nativeError: any) {
           const errorMessage = nativeError?.message || nativeError?.toString() || 'Unknown error';
           const errorCode = nativeError?.code || 'UNKNOWN';
@@ -328,6 +329,7 @@ class BLEService {
       // Connect to device
       const connectedDevice = await device.connect();
       console.log(`✅ Connected to device: ${deviceId}`);
+      this.postNotification('Device Connected', `Successfully connected to ${device.name || deviceId}`, 'success');
 
       // Discover services and characteristics first
       await connectedDevice.discoverAllServicesAndCharacteristics();
@@ -464,8 +466,9 @@ class BLEService {
         }
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error connecting to device ${deviceId}:`, error);
+      this.postNotification('Connection Failed', `Failed to connect to device: ${error?.message || 'Unknown error'}`, 'error');
       this.connectedDevices.delete(deviceId);
       this.deviceCharacteristics.delete(deviceId);
     }
@@ -883,6 +886,31 @@ class BLEService {
   }
 
   /**
+   * Post a notification to all subscribed clients
+   * @param title - Notification title
+   * @param message - Notification message
+   * @param type - Notification type (info, success, warning, error)
+   */
+  postNotification(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
+    console.log(`📢 Notification [${type}]: ${title} - ${message}`);
+    this.notificationListeners.forEach((listener) => {
+      listener(title, message, type);
+    });
+  }
+
+  /**
+   * Add a notification listener
+   * @param listener - Callback function (title: string, message: string, type?: string) => void
+   * @returns Unsubscribe function
+   */
+  onNotification(listener: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void): () => void {
+    this.notificationListeners.add(listener);
+    return () => {
+      this.notificationListeners.delete(listener);
+    };
+  }
+
+  /**
    * Get discovered devices
    */
   getDiscoveredDevices(): Device[] {
@@ -959,6 +987,7 @@ class BLEService {
     // Clear listeners
     this.messageListeners.clear();
     this.connectionListeners.clear();
+    this.notificationListeners.clear();
 
     if (this.stateSubscription) {
       this.stateSubscription.remove();

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Device } from 'react-native-ble-plx';
+import { Alert } from 'react-native';
 import { bleService, DEVICE_ID, ADVERTISEMENT_MESSAGE, SERVICE_UUID, CHARACTERISTIC_UUID } from '@/services/bleService';
 
 export interface DiscoveredDevice {
@@ -271,6 +272,19 @@ export function useBLE() {
           );
         });
       }
+    });
+
+    return () => {
+      removeListener();
+    };
+  }, []);
+
+  // Set up notification listener
+  useEffect(() => {
+    const removeListener = bleService.onNotification((title, message, type = 'info') => {
+      console.log('📢 Notification received:', { title, message, type });
+      // Show notification as Alert
+      Alert.alert(title, message);
     });
 
     return () => {
