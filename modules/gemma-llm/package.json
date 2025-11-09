@@ -1,0 +1,17 @@
+{
+  "name": "gemma-llm",
+  "version": "1.0.0",
+  "description": "Native Android module for Google Gemma LLM inference using LiteRT",
+  "main": "src/index.ts",
+  "keywords": [
+    "react-native",
+    "expo",
+    "gemma",
+    "llm",
+    "ai",
+    "litert"
+  ],
+  "author": "BLE Relay Team",
+  "license": "MIT"
+}
+
